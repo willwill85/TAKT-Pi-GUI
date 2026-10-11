@@ -67,7 +67,7 @@ struct FileViewerView: View {
         case .pdf(let d): PDFRepresentable(data: d)
         case .csv(let t): CSVTableView(text: t, delimiter: file.path.lowercased().hasSuffix(".tsv") ? "\t" : ",")
         case .docx(let a): ScrollView { Text(AttributedString(a)).textSelection(.enabled).padding(24).frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity) }
-        case .media(let u): VideoPlayer(player: AVPlayer(url: u))
+        case .media(let u): MediaPlayerView(url: u).id(u)
         }
     }
 
@@ -178,5 +178,39 @@ struct CSVTableView: View {
         }
         if !field.isEmpty || !row.isEmpty { row.append(field); rows.append(row) }
         return rows
+    }
+}
+
+/// Plays a local audio or video file. The AVPlayer is created once per URL and held in state; building
+/// `VideoPlayer(player: AVPlayer(url:))` inline made a new player on every view update, and AVKit's
+/// SwiftUI bridge crashed while instantiating its metadata on macOS 27.
+struct MediaPlayerView: View {
+    let url: URL
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        Group {
+            if let player {
+                NativeVideoView(player: player)
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .onAppear { if player == nil { player = AVPlayer(url: url) } }
+        .onDisappear { player?.pause(); player = nil }
+    }
+}
+
+/// AppKit's AVPlayerView, used directly so AVKit's SwiftUI bridge is not involved at all.
+struct NativeVideoView: NSViewRepresentable {
+    let player: AVPlayer
+    func makeNSView(context: Context) -> AVPlayerView {
+        let v = AVPlayerView()
+        v.controlsStyle = .inline
+        v.player = player
+        return v
+    }
+    func updateNSView(_ v: AVPlayerView, context: Context) {
+        if v.player !== player { v.player = player }
     }
 }
