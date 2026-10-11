@@ -40,3 +40,14 @@ final class UsageTests: XCTestCase {
         XCTAssertEqual(Money.format(nil), "—")
     }
 }
+
+final class SidebarFoldTests: XCTestCase {
+    func testTagFilterNeverChangesFolding() {
+        let open: Set<String> = ["a"]
+        for filtered in [false, true] {
+            XCTAssertTrue(isProjectExpanded(key: "a", expanded: open, tagFilterActive: filtered))
+            XCTAssertFalse(isProjectExpanded(key: "b", expanded: open, tagFilterActive: filtered),
+                           "a collapsed project must stay collapsed while a tag is selected")
+        }
+    }
+}

@@ -111,7 +111,7 @@ struct SidebarView: View {
     }
 
     @ViewBuilder private func projectSection(_ g: ProjectGroup) -> some View {
-        let isOpen = expanded.contains(g.key) || !tagFilter.isEmpty
+        let isOpen = isProjectExpanded(key: g.key, expanded: expanded, tagFilterActive: !tagFilter.isEmpty)
         let fams = visibleFamilies(g)
         ProjectHeader(group: g, open: isOpen, tags: model.tagState.tags(forProject: g.key),
                       toggle: { withAnimation(.snappy(duration: 0.18)) { toggleExpanded(g.key) } },

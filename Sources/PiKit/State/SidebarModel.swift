@@ -85,3 +85,11 @@ public struct SidebarModel: Sendable {
         return model
     }
 }
+
+/// Whether a project section is unfolded in the sidebar.
+///
+/// Folding is always the user's own choice: a tag filter only narrows which projects and threads are
+/// listed, it never forces sections open (otherwise the fold button would do nothing while a tag is selected).
+public func isProjectExpanded(key: String, expanded: Set<String>, tagFilterActive: Bool) -> Bool {
+    expanded.contains(key)
+}
