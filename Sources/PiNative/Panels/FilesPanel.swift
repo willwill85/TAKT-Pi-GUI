@@ -92,19 +92,63 @@ struct TreeRows: View {
 
     var body: some View {
         let ws = model.workspace
+        let statusByPath = ws.gitStatusByAbsolutePath
+        let changedDirs = ws.changedDirectoryPaths
         ForEach(ws.entries[dir] ?? []) { e in
-            TreeRow(entry: e, depth: depth, open: e.isDir && ws.expanded.contains(e.path), selected: ws.tab == .file(e.path))
+            TreeRow(entry: e, depth: depth,
+                    open: e.isDir && ws.expanded.contains(e.path),
+                    selected: ws.tab == .file(e.path),
+                    gitStatus: statusByPath[e.path],
+                    containsChanges: e.isDir && changedDirs.contains(e.path))
                 .onTapGesture {
                     if e.isDir { withAnimation(.snappy(duration: 0.15)) { ws.toggle(e.path) } } else { ui.openFile(e.path) }
                 }
                 .contextMenu {
+                    if let rel = relativePath(e.path) {
+                        Button("Insert @Mention") { ui.attachMention(rel) }
+                    }
+                    if !e.isDir { Button("Attach to Message") { ui.attachMention(e.path) } }
+                    Divider()
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: e.path)]) }
                     Button("Copy Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(e.path, forType: .string) }
-                    if let cwd = ws.cwd, e.path.hasPrefix(cwd) { Button("Copy Relative Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(String(e.path.dropFirst(cwd.count + 1)), forType: .string) } }
-                    if !e.isDir { Button("Open with Default App") { NSWorkspace.shared.open(URL(fileURLWithPath: e.path)) } }
-                    Button("Attach to Message") { ui.attachMention(e.path) }
+                    if let rel = relativePath(e.path) { Button("Copy Relative Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(rel, forType: .string) } }
+                    if !e.isDir {
+                        Button("Open with Default App") { NSWorkspace.shared.open(URL(fileURLWithPath: e.path)) }
+                        Button("Download…") { saveCopy(e.path) }
+                    }
                 }
             if e.isDir && ws.expanded.contains(e.path) { TreeRows(dir: e.path, depth: depth + 1) }
+        }
+    }
+
+    private func relativePath(_ path: String) -> String? {
+        guard let cwd = model.workspace.cwd, path.hasPrefix(cwd + "/") else { return nil }
+        return String(path.dropFirst(cwd.count + 1))
+    }
+
+    private func saveCopy(_ path: String) {
+        let panel = NSSavePanel(); panel.nameFieldStringValue = (path as NSString).lastPathComponent
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        try? FileManager.default.removeItem(at: dest)
+        try? FileManager.default.copyItem(at: URL(fileURLWithPath: path), to: dest)
+    }
+}
+
+extension TreeRow {
+    static func gitLetter(_ c: GitChange) -> String {
+        let code = c.code.isEmpty ? c.status : c.code
+        if code.contains("?") { return "U" }
+        if code.contains("A") { return "A" }
+        if code.contains("D") { return "D" }
+        if code.contains("R") { return "R" }
+        return "M"
+    }
+    static func gitColor(_ c: GitChange) -> Color {
+        switch gitLetter(c) {
+        case "A", "U": return .green
+        case "D": return .red
+        case "R": return .purple
+        default: return .orange
         }
     }
 }
@@ -114,6 +158,8 @@ struct TreeRow: View {
     let depth: Int
     let open: Bool
     let selected: Bool
+    var gitStatus: GitChange? = nil
+    var containsChanges = false
     @State private var hover = false
     var body: some View {
         HStack(spacing: 5) {
@@ -121,9 +167,13 @@ struct TreeRow: View {
             else { Color.clear.frame(width: 12) }
             if entry.isDir { Image(systemName: open ? "folder.fill" : "folder").font(.system(size: 12.5)).foregroundStyle(Color.accentColor.opacity(0.85)).frame(width: 16) }
             else { FileIcon(path: entry.path).frame(width: 16) }
-            Text(entry.name).font(.system(size: 13)).lineLimit(1).foregroundStyle(entry.hidden != nil ? .secondary : .primary)
-            if entry.linkTarget != nil { Image(systemName: "arrow.turn.up.right").font(.system(size: 9)).foregroundStyle(.tertiary) }
+            Text(entry.name).font(.system(size: 13)).lineLimit(1)
+                .foregroundStyle(gitStatus != nil ? TreeRow.gitColor(gitStatus!) : entry.hidden != nil ? .secondary : .primary)
+                .opacity(entry.hidden != nil ? 0.55 : 1)
+            if entry.linkTarget != nil { Image(systemName: "arrow.turn.up.right").font(.system(size: 9)).foregroundStyle(.tertiary).help("Symlink: \(entry.linkTarget ?? "")") }
             Spacer(minLength: 0)
+            if containsChanges && gitStatus == nil { Circle().fill(Color.orange).frame(width: 5, height: 5).help("Contains changed files") }
+            if let g = gitStatus { Text(TreeRow.gitLetter(g)).font(.system(size: 10.5, weight: .semibold, design: .monospaced)).foregroundStyle(TreeRow.gitColor(g)).help(g.status) }
         }
         .padding(.leading, CGFloat(depth) * 14 + 6).padding(.trailing, 6).frame(height: 26)
         .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.sidebarSelection : hover ? Theme.sidebarHover : .clear))

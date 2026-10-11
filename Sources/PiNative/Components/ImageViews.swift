@@ -213,7 +213,7 @@ struct PiImageLoader: AttachmentLoader {
 // MARK: - Image paths mentioned in assistant text
 
 enum ImagePathScanner {
-    private static let regex = try! NSRegularExpression(pattern: #"(?:(?<=[\s`"'(\[])|^)((?:~|\.{0,2})?/?[\w@%+=:,.~\-/\u{4e00}-\u{9fff} ]*?[\w\-\u{4e00}-\u{9fff}]\.(?:png|jpe?g|gif|webp|bmp|heic|svg))(?=$|[\s`"')\]:,;!?])"#, options: [.caseInsensitive])
+    private static let regex = try! NSRegularExpression(pattern: #"(?:(?<=[\s`"'(\[])|^)((?:~|\.{0,2})?/?[\w@%+=:,.~\-/\x{4e00}-\x{9fff} ]*?[\w\-\x{4e00}-\x{9fff}]\.(?:png|jpe?g|gif|webp|bmp|heic|svg))(?=$|[\s`"')\]:,;!?])"#, options: [.caseInsensitive])
     /// Absolute / `~` / relative image paths mentioned in `text` (not inside http URLs).
     static func paths(in text: String) -> [String] {
         var found: [String] = []

@@ -26,6 +26,28 @@ public final class WorkspaceModel {
     public var openFiles: [OpenFile] = []
     public var tab: PanelTab = .review
     public private(set) var git = GitStatus()
+
+    /// Git changes keyed by absolute path (git reports paths relative to the repo root).
+    public var gitStatusByAbsolutePath: [String: GitChange] {
+        guard let root = git.root ?? cwd else { return [:] }
+        var out: [String: GitChange] = [:]
+        for c in git.files { out[(root as NSString).appendingPathComponent(c.path)] = c }
+        return out
+    }
+
+    /// Directories (absolute) that contain at least one changed file.
+    public var changedDirectoryPaths: Set<String> {
+        guard let root = git.root ?? cwd else { return [] }
+        var out: Set<String> = []
+        for c in git.files {
+            var dir = (c.path as NSString).deletingLastPathComponent
+            while !dir.isEmpty && dir != "." {
+                out.insert((root as NSString).appendingPathComponent(dir))
+                dir = (dir as NSString).deletingLastPathComponent
+            }
+        }
+        return out
+    }
     public private(set) var worktree: WorktreeContext?
     public var reviewSelection: String?
     public private(set) var diffs: [String: String] = [:]

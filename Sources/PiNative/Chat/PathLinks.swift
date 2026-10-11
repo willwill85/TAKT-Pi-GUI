@@ -6,7 +6,7 @@ import PiKit
 enum PathLinker {
     static let scheme = "pinative-path"
     private static let ext = "swift|ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|java|kt|c|cc|cpp|h|hpp|cs|m|mm|sh|zsh|bash|sql|json|jsonl|yaml|yml|toml|xml|html|htm|css|scss|md|mdx|txt|csv|tsv|log|env|lock|png|jpe?g|gif|webp|svg|pdf|docx?|xlsx?|pptx?|zip|ini|conf|cfg|plist|gradle|vue|svelte|astro|php|lua|dart|ex|exs|zig|nix|tf|proto|graphql|gql|prisma|dockerfile|makefile"
-    private static let pathRegex = try! NSRegularExpression(pattern: "^(?:~|\\.{1,2})?/?[\\w@%+=,.~\\-\\u{4e00}-\\u{9fff}]+(?:/[\\w@%+=,.~\\-\\u{4e00}-\\u{9fff} ]+)*/?(?::\\d+(?::\\d+)?)?$")
+    private static let pathRegex = try! NSRegularExpression(pattern: "^(?:~|\\.{1,2})?/?[\\w@%+=,.~\\-\\x{4e00}-\\x{9fff}]+(?:/[\\w@%+=,.~\\-\\x{4e00}-\\x{9fff} ]+)*/?(?::\\d+(?::\\d+)?)?$")
     private static let extRegex = try! NSRegularExpression(pattern: "\\.(?:\(ext))(?::\\d+(?::\\d+)?)?$", options: .caseInsensitive)
     private static let codeSpan = try! NSRegularExpression(pattern: "(?<!`)`([^`\\n]+)`(?!`)")
 
