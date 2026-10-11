@@ -53,7 +53,9 @@ final class UIState {
     var sidebarVisible = true
     var sidebarWidth: CGFloat = 280
     var rightPanelVisible = false
-    var rightPanelWidth: CGFloat = 460
+    var rightPanelWidth: CGFloat = {
+        let v = UserDefaults.standard.double(forKey: "rightPanelWidth"); return v > 0 ? CGFloat(v) : 460
+    }() { didSet { UserDefaults.standard.set(Double(rightPanelWidth), forKey: "rightPanelWidth") } }
     var searchOpen = false
     var focusComposer = 0
     var enterToSend: Bool = UserDefaults.standard.object(forKey: "enterToSend") as? Bool ?? true {

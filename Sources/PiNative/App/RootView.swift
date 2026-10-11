@@ -43,7 +43,7 @@ struct MainView: View {
                 DetailView()
             }
             if ui.rightPanelVisible {
-                Rectangle().fill(Theme.separator).frame(width: 1)
+                PanelResizer(width: $ui.rightPanelWidth)
                 RightPanelView().frame(width: ui.rightPanelWidth)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
@@ -75,6 +75,23 @@ struct DetailView: View {
         case .automations:
             AutomationsView()
         }
+    }
+}
+
+/// Drag handle on the left edge of the right panel. Dragging left makes the panel wider.
+struct PanelResizer: View {
+    @Binding var width: CGFloat
+    @State private var start: CGFloat?
+    var body: some View {
+        Rectangle().fill(Theme.separator).frame(width: 1)
+            .overlay(Color.clear.frame(width: 8).contentShape(Rectangle())
+                .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { v in
+                        if start == nil { start = width }
+                        width = min(900, max(280, (start ?? width) - v.translation.width))
+                    }
+                    .onEnded { _ in start = nil }))
     }
 }
 
