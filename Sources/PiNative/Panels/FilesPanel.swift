@@ -94,6 +94,9 @@ struct ChangesSection: View {
     let cwd: String
     @Environment(AppModel.self) private var model
     @Environment(UIState.self) private var ui
+    /// Rows rendered at once. A repository with thousands of changes (generated files, a missing .gitignore)
+    /// would otherwise build thousands of views just to open the project.
+    @State private var shown = 60
 
     var body: some View {
         let git = model.workspace.git
@@ -105,8 +108,13 @@ struct ChangesSection: View {
                 Spacer()
             }
             .padding(.horizontal, 12).frame(height: 24)
-            ForEach(git.files) { c in
+            ForEach(git.files.prefix(shown)) { c in
                 ChangeRow(change: c, cwd: cwd)
+            }
+            if git.files.count > shown {
+                Button("Show \(min(200, git.files.count - shown)) more of \(git.files.count - shown)") { shown += 200 }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+                    .padding(.horizontal, 12).frame(height: 24)
             }
             Rectangle().fill(Theme.separator).frame(height: 1).padding(.vertical, 4)
         }

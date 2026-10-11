@@ -25,28 +25,37 @@ public final class WorkspaceModel {
     public private(set) var treeError: String?
     public var openFiles: [OpenFile] = []
     public var tab: PanelTab = .review
-    public private(set) var git = GitStatus()
+    public private(set) var git = GitStatus() { didSet { rebuildGitIndex() } }
 
     /// Git changes keyed by absolute path (git reports paths relative to the repo root).
-    public var gitStatusByAbsolutePath: [String: GitChange] {
-        guard let root = git.root ?? cwd else { return [:] }
-        var out: [String: GitChange] = [:]
-        for c in git.files { out[(root as NSString).appendingPathComponent(c.path)] = c }
-        return out
-    }
-
+    /// Built once per git change, never per row: tree rows read it on every render.
+    public private(set) var gitStatusByAbsolutePath: [String: GitChange] = [:]
     /// Directories (absolute) that contain at least one changed file.
-    public var changedDirectoryPaths: Set<String> {
-        guard let root = git.root ?? cwd else { return [] }
-        var out: Set<String> = []
+    public private(set) var changedDirectoryPaths: Set<String> = []
+
+    /// Test seam: applies a git status as `refreshGit` would.
+    public func testSetGit(_ s: GitStatus) { git = s }
+
+    private func rebuildGitIndex() {
+        guard let root = git.root ?? cwd, !git.files.isEmpty else {
+            if !gitStatusByAbsolutePath.isEmpty { gitStatusByAbsolutePath = [:] }
+            if !changedDirectoryPaths.isEmpty { changedDirectoryPaths = [] }
+            return
+        }
+        var byPath: [String: GitChange] = [:]
+        byPath.reserveCapacity(git.files.count)
+        var dirs: Set<String> = []
         for c in git.files {
+            byPath[root + "/" + c.path] = c
             var dir = (c.path as NSString).deletingLastPathComponent
             while !dir.isEmpty && dir != "." {
-                out.insert((root as NSString).appendingPathComponent(dir))
+                // Parents of an already-registered directory are registered too, so stop at the first hit.
+                if !dirs.insert(root + "/" + dir).inserted { break }
                 dir = (dir as NSString).deletingLastPathComponent
             }
         }
-        return out
+        gitStatusByAbsolutePath = byPath
+        changedDirectoryPaths = dirs
     }
     public private(set) var worktree: WorktreeContext?
     public var reviewSelection: String?

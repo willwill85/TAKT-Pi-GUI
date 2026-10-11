@@ -51,3 +51,22 @@ final class SidebarFoldTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class WorkspaceGitIndexTests: XCTestCase {
+    func testIndexIsBuiltOncePerGitChangeAndHandlesLargeSets() throws {
+        let ws = WorkspaceModel()
+        ws.setCwd("/p")
+        XCTAssertTrue(ws.changedDirectoryPaths.isEmpty)
+        // Not reachable through the network here, so exercise the pure path-walking the same way refreshGit does.
+        var s = GitStatus(); s.isRepo = true; s.root = "/p"
+        s.files = (0..<20_000).map { GitChange(path: "a/b\($0 % 50)/c/f\($0).txt", status: "modified", code: " M") }
+        let t0 = Date()
+        ws.testSetGit(s)
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 1.0, "indexing 20k changes must be fast")
+        XCTAssertEqual(ws.gitStatusByAbsolutePath.count, 20_000)
+        XCTAssertTrue(ws.changedDirectoryPaths.contains("/p/a"))
+        XCTAssertTrue(ws.changedDirectoryPaths.contains("/p/a/b7/c"))
+        XCTAssertEqual(ws.changedDirectoryPaths.count, 1 + 50 * 2)
+    }
+}
