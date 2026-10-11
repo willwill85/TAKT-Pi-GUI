@@ -13,8 +13,9 @@ struct PriceDot: View {
 }
 
 func priceText(_ p: ModelPrice) -> String {
-    func f(_ v: Double) -> String { v >= 10 ? String(format: "%.0f", v) : v >= 1 ? String(format: "%.1f", v) : String(format: "%.2f", v) }
-    return "$\(f(p.input)) in · $\(f(p.output)) out / 1M tokens"
+    func f(_ v: Double) -> String { v <= 0 ? "0" : v < 0.01 ? "<0.01" : v >= 10 ? String(format: "%.0f", v) : v >= 1 ? String(format: "%.1f", v) : String(format: "%.2f", v) }
+    func d(_ v: Double) -> String { let t = f(v); return t.hasPrefix("<") ? "<$" + t.dropFirst() : "$" + t }
+    return "\(d(p.input)) in · \(d(p.output)) out / 1M tokens"
 }
 
 struct UsageTotalCard: View {
