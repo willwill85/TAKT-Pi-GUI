@@ -32,17 +32,29 @@ public extension Color {
 }
 
 /// The mark without a plate, for small in-app use.
+/// Drawn in a single Canvas on a fixed 1000-unit grid so the glyph and the cursor block always keep
+/// their proportions, whatever size the surrounding layout proposes.
 public struct PiMark: View {
     public var size: CGFloat
     public var monochrome: Bool
     public init(size: CGFloat = 28, monochrome: Bool = false) { self.size = size; self.monochrome = monochrome }
     public var body: some View {
-        ZStack {
-            PiGlyph().fill(monochrome ? Color.primary : Color.white)
-            if monochrome { CursorBlock().fill(Color.primary) }
-            else { CursorBlock().fill(LinearGradient(colors: [.taktAccent2, .taktAccent], startPoint: .top, endPoint: .bottom)) }
+        Canvas { ctx, canvas in
+            let side = min(canvas.width, canvas.height)
+            let rect = CGRect(x: (canvas.width - side) / 2, y: (canvas.height - side) / 2, width: side, height: side)
+            let ink: Color = monochrome ? .primary : .white
+            ctx.fill(PiGlyph().path(in: rect), with: .color(ink))
+            let cursor = CursorBlock().path(in: rect)
+            if monochrome {
+                ctx.fill(cursor, with: .color(.primary))
+            } else {
+                ctx.fill(cursor, with: .linearGradient(Gradient(colors: [.taktAccent2, .taktAccent]),
+                                                       startPoint: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.62),
+                                                       endPoint: CGPoint(x: rect.midX, y: rect.minY + rect.height * 0.73)))
+            }
         }
         .frame(width: size, height: size)
+        .fixedSize()
     }
 }
 

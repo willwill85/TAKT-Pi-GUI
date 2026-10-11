@@ -65,7 +65,7 @@ struct PanelTabButton: View {
         HStack(spacing: 5) {
             if let file { FileIcon(path: file) } else if let icon { Image(systemName: icon).font(.system(size: 12)) }
             Text(title).font(.system(size: 12.5, weight: active ? .semibold : .medium)).lineLimit(1).frame(maxWidth: 160)
-            if let badge { Text(badge).font(.system(size: 10.5, weight: .semibold)).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(Color.accentColor.opacity(0.18))).foregroundStyle(Color.accentColor) }
+            if let badge { Text(badge).font(.system(size: 10.5, weight: .semibold)).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(Color.primary.opacity(0.18))).foregroundStyle(Color.primary) }
             if let onClose, hover || active { Button(action: onClose) { Image(systemName: "xmark").font(.system(size: 8.5, weight: .bold)) }.buttonStyle(.plain).foregroundStyle(.tertiary) }
         }
         .foregroundStyle(active ? Color.primary : Color.secondary)

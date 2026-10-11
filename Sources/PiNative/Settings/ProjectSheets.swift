@@ -90,7 +90,7 @@ struct ProjectSettingsSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "folder.fill").foregroundStyle(Color.accentColor)
+                Image(systemName: "folder.fill").foregroundStyle(Color.secondary)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(group?.name ?? SidebarModel.folderName(root)).font(.system(size: 16, weight: .semibold))
                     Text(shortPath(root)).font(.system(size: 11.5)).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head)
@@ -165,7 +165,7 @@ struct ProjectSettingsSheet: View {
             if let w = worktrees, w.isGit {
                 ForEach(w.worktrees) { t in
                     HStack {
-                        Image(systemName: "arrow.triangle.branch").foregroundStyle(t.isMain ? Color.secondary : Color.accentColor)
+                        Image(systemName: "arrow.triangle.branch").foregroundStyle(t.isMain ? Color.secondary : Color.primary)
                         VStack(alignment: .leading) {
                             Text(t.branch ?? "detached").font(.system(size: 13, weight: .medium)) + Text(t.isMain ? "  main checkout" : "").font(.system(size: 11.5)).foregroundColor(.secondary)
                             Text(shortPath(t.path)).font(.system(size: 11.5)).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head)

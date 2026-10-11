@@ -137,7 +137,7 @@ struct ComposerView: View {
             Button("Add photos & files…") { pickFiles() }
             if let store { Button("Compact conversation") { Task { await store.compact() } } }
         } label: { Image(systemName: "plus").font(.system(size: 14, weight: .medium)).frame(width: 28, height: 28) }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 28).help("Attach")
+            .menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).frame(width: 28).help("Attach")
     }
 
     private var modelMenu: some View {
@@ -157,7 +157,7 @@ struct ComposerView: View {
                 Text(modelLabel).lineLimit(1)
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
             }.font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary).padding(.horizontal, 6).frame(height: 26)
-        }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Model")
+        }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).fixedSize().help("Model")
     }
 
     private var modelLabel: String {
@@ -177,7 +177,7 @@ struct ComposerView: View {
                     Text((currentThinking ?? "—").capitalized)
                     Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
                 }.font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary).padding(.horizontal, 6).frame(height: 26)
-            }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Reasoning effort")
+            }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).fixedSize().help("Reasoning effort")
         }
     }
 

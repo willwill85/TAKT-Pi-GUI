@@ -93,7 +93,7 @@ struct ThreadHeader: View {
             if store.isRunning { SpinnerView(size: 11) }
             Spacer()
             if let w = ws.worktree, w.isGit, let cur = w.worktrees.first(where: { $0.path == w.currentPath }) ?? w.worktrees.first {
-                Chip { HStack(spacing: 4) { Image(systemName: "arrow.triangle.branch").foregroundStyle(cur.isMain ? Color.secondary : Color.accentColor); Text(cur.branch ?? "detached").font(.system(size: 12, design: .monospaced)) } }
+                Chip { HStack(spacing: 4) { Image(systemName: "arrow.triangle.branch").foregroundStyle(cur.isMain ? Color.secondary : Color.primary); Text(cur.branch ?? "detached").font(.system(size: 12, design: .monospaced)) } }
                     .help(w.currentPath ?? "")
             }
             if let cwd = store.info?.cwd {
@@ -101,15 +101,15 @@ struct ThreadHeader: View {
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) }
                     Button("Open in Terminal") { NSWorkspace.shared.open([URL(fileURLWithPath: cwd)], withApplicationAt: URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"), configuration: NSWorkspace.OpenConfiguration()) }
                     Button("Open in VS Code") { if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.microsoft.VSCode") { NSWorkspace.shared.open([URL(fileURLWithPath: cwd)], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) } }
-                } label: { Image(systemName: "arrow.up.forward.app").font(.system(size: 13)).frame(width: 26, height: 26) }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 30).help("Open in…")
+                } label: { Image(systemName: "arrow.up.forward.app").font(.system(size: 13)).frame(width: 26, height: 26) }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).frame(width: 30).help("Open in…")
             }
-            Button { ui.showPanel(.terminal) } label: { Image(systemName: "terminal").font(.system(size: 13.5)).foregroundStyle(ws.tab == .terminal && ui.rightPanelVisible ? Color.accentColor : .secondary) }
+            Button { ui.showPanel(.terminal) } label: { Image(systemName: "terminal").font(.system(size: 13.5)).foregroundStyle(ws.tab == .terminal && ui.rightPanelVisible ? Color.primary : .secondary) }
                 .buttonStyle(HoverButtonStyle()).help("Terminal")
             Button { ui.showPanel(.review) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "plusminus.circle").font(.system(size: 13.5))
                     if !ws.git.files.isEmpty { Text("+\(ws.git.additions)").foregroundStyle(Theme.added); Text("−\(ws.git.deletions)").foregroundStyle(Theme.removed) }
-                }.font(.system(size: 12, weight: .medium)).foregroundStyle(ws.tab == .review && ui.rightPanelVisible ? Color.accentColor : .secondary).padding(.horizontal, 4)
+                }.font(.system(size: 12, weight: .medium)).foregroundStyle(ws.tab == .review && ui.rightPanelVisible ? Color.primary : .secondary).padding(.horizontal, 4)
             }.buttonStyle(HoverButtonStyle()).help("Review changes")
             Menu {
                 Button("Rename…") { nameDraft = title; renaming = true }
@@ -130,8 +130,8 @@ struct ThreadHeader: View {
                 Button("Copy Session ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(store.sessionId, forType: .string) }
                 Button("Export as HTML…") { exportHTML() }
             } label: { Image(systemName: "ellipsis").font(.system(size: 14)).frame(width: 26, height: 26) }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 30)
-            Button { withAnimation(.snappy(duration: 0.22)) { ui.rightPanelVisible.toggle() } } label: { Image(systemName: "sidebar.right").font(.system(size: 14)).foregroundStyle(ui.rightPanelVisible ? Color.accentColor : .secondary) }
+                .menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).frame(width: 30)
+            Button { withAnimation(.snappy(duration: 0.22)) { ui.rightPanelVisible.toggle() } } label: { Image(systemName: "sidebar.right").font(.system(size: 14)).foregroundStyle(ui.rightPanelVisible ? Color.primary : .secondary) }
                 .buttonStyle(HoverButtonStyle()).help("Toggle side panel (⌥⌘B)")
         }
         .padding(.horizontal, 14).frame(height: 44)

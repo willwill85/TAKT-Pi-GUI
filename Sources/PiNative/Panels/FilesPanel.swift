@@ -22,7 +22,7 @@ struct FilesPanel: View {
                     Button("Refresh") { Task { await ws.reloadTree() } }
                     Button("Upload files…") { upload() }
                     if let cwd = ws.cwd { Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) } }
-                } label: { Image(systemName: "ellipsis").font(.system(size: 12)) }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
+                } label: { Image(systemName: "ellipsis").font(.system(size: 12)) }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).frame(width: 22)
             }
             .padding(.horizontal, 10).frame(height: 32)
             .background(RoundedRectangle(cornerRadius: 8).fill(Theme.surface)).padding(.horizontal, 10).padding(.vertical, 8)
@@ -231,7 +231,7 @@ struct TreeRow: View {
         HStack(spacing: 5) {
             if entry.isDir { Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(.tertiary).rotationEffect(.degrees(open ? 90 : 0)).frame(width: 12) }
             else { Color.clear.frame(width: 12) }
-            if entry.isDir { Image(systemName: open ? "folder.fill" : "folder").font(.system(size: 12.5)).foregroundStyle(Color.accentColor.opacity(0.85)).frame(width: 16) }
+            if entry.isDir { Image(systemName: open ? "folder.fill" : "folder").font(.system(size: 12.5)).foregroundStyle(Color.secondary.opacity(0.85)).frame(width: 16) }
             else { FileIcon(path: entry.path).frame(width: 16) }
             Text(entry.name).font(.system(size: 13)).lineLimit(1)
                 .foregroundStyle(gitStatus != nil ? TreeRow.gitColor(gitStatus!) : entry.hidden != nil ? .secondary : .primary)

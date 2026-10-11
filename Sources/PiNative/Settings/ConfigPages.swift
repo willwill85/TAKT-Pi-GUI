@@ -39,13 +39,13 @@ struct ModelsSettings: View {
             SettingsRow(title: "Model") {
                 Menu {
                     ForEach(model.catalog.models) { m in Button("\(m.name)  ·  \(m.provider)") { setDefault(provider: m.provider, modelId: m.modelId) } }
-                } label: { Text(model.catalog.info(for: model.catalog.defaultModel)?.name ?? "Choose…").lineLimit(1) }.menuStyle(.borderlessButton).fixedSize()
+                } label: { Text(model.catalog.info(for: model.catalog.defaultModel)?.name ?? "Choose…").lineLimit(1) }.menuStyle(.borderlessButton).tint(.secondary).fixedSize()
             }
             SettingsRow(title: "Reasoning effort", divider: false) {
                 let levels = model.catalog.levels(for: model.catalog.defaultModel)
                 Menu {
                     ForEach(levels, id: \.self) { l in Button(l.capitalized) { Task { error = await send(model, "PUT", "/api/models/default", ["thinkingLevel": l, "cwd": model.workspace.cwd ?? model.homeDirectory]); await model.loadModels(cwd: nil) } } }
-                } label: { Text((model.catalog.defaultThinking ?? levels.first ?? "—").capitalized) }.menuStyle(.borderlessButton).fixedSize().disabled(levels.isEmpty)
+                } label: { Text((model.catalog.defaultThinking ?? levels.first ?? "—").capitalized) }.menuStyle(.borderlessButton).tint(.secondary).fixedSize().disabled(levels.isEmpty)
             }
         }
         SettingsCard(title: "Provider accounts", footer: "Credentials are stored by pi in ~/.pi/agent/auth.json.") {
@@ -285,7 +285,7 @@ struct PluginsSettings: View {
                         Menu {
                             Button("Update") { Task { await act("update", src, scope: p["scope"]?.string) } }
                             Button("Remove", role: .destructive) { Task { await act("remove", src, scope: p["scope"]?.string) } }
-                        } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
+                        } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).frame(width: 22)
                         Toggle("", isOn: Binding(get: { !disabled }, set: { on in Task { await act(on ? "enable" : "disable", src, scope: p["scope"]?.string) } })).toggleStyle(.switch).controlSize(.small).labelsHidden()
                     }
                 }
@@ -336,7 +336,7 @@ struct MCPSettings: View {
                         Menu {
                             Button("Test") { Task { await test(scope, name) } }
                             Button("Remove", role: .destructive) { Task { error = await send(model, "POST", "/api/mcp", ["action": "remove", "scope": scope, "name": name, "cwd": cwd]); await load() } }
-                        } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
+                        } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).frame(width: 22)
                         Toggle("", isOn: Binding(get: { s["enabled"]?.bool ?? true }, set: { on in Task { error = await send(model, "POST", "/api/mcp", ["action": on ? "enable" : "disable", "scope": scope, "name": name, "cwd": cwd]); await load() } })).toggleStyle(.switch).controlSize(.small).labelsHidden()
                     }
                 }

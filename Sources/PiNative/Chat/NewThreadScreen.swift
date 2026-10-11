@@ -15,7 +15,7 @@ struct NewThreadScreen: View {
                 }
                 Spacer()
                 Button { ui.showPanel(.terminal) } label: { Image(systemName: "terminal").font(.system(size: 14)).foregroundStyle(.secondary) }.buttonStyle(HoverButtonStyle()).help("Terminal")
-                Button { withAnimation(.snappy(duration: 0.22)) { ui.rightPanelVisible.toggle() } } label: { Image(systemName: "sidebar.right").font(.system(size: 14)).foregroundStyle(ui.rightPanelVisible ? Color.accentColor : .secondary) }.buttonStyle(HoverButtonStyle()).padding(.trailing, 14)
+                Button { withAnimation(.snappy(duration: 0.22)) { ui.rightPanelVisible.toggle() } } label: { Image(systemName: "sidebar.right").font(.system(size: 14)).foregroundStyle(ui.rightPanelVisible ? Color.primary : .secondary) }.buttonStyle(HoverButtonStyle()).padding(.trailing, 14)
             }.frame(height: 44).background(WindowDragArea())
             Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: 18) {
@@ -81,7 +81,7 @@ struct ProjectBar: View {
             } label: {
                 HStack(spacing: 5) { Image(systemName: "folder").font(.system(size: 11.5)); Text(displayName(cwd)).font(.system(size: 12.5, weight: .medium, design: .monospaced)).lineLimit(1); Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)) }
                     .foregroundStyle(.secondary)
-            }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help(cwd)
+            }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).fixedSize().help(cwd)
 
             if let w = ws.worktree, w.isGit {
                 let current = w.worktrees.first { $0.path == (w.currentPath ?? cwd) }
@@ -93,11 +93,11 @@ struct ProjectBar: View {
                     Button("New worktree…") { creating = true }
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "arrow.triangle.branch").font(.system(size: 11.5)).foregroundStyle(current?.isMain == false ? Color.accentColor : .secondary)
+                        Image(systemName: "arrow.triangle.branch").font(.system(size: 11.5)).foregroundStyle(current?.isMain == false ? Color.primary : .secondary)
                         Text(current?.branch ?? "detached").font(.system(size: 12.5, weight: .medium, design: .monospaced)).lineLimit(1)
                         Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
                     }.foregroundStyle(.secondary).padding(.leading, 8)
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).fixedSize()
             }
             Spacer()
         }

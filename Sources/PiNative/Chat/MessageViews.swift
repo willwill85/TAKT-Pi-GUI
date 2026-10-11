@@ -111,7 +111,7 @@ struct ChangesCard: View {
                 Text("−\(del)").foregroundStyle(Theme.removed).font(.system(size: 12.5, weight: .medium))
                 Spacer()
                 Button("Review") { ui.showPanel(.review) }
-                    .buttonStyle(.plain).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.accentColor)
+                    .buttonStyle(.plain).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.primary)
             }.padding(.horizontal, 14).padding(.vertical, 10)
             ForEach(files.prefix(12)) { f in
                 Divider().opacity(0.5)
@@ -190,7 +190,7 @@ struct OutputBlock: View {
         VStack(alignment: .leading, spacing: 4) {
             if long && !expanded {
                 Button("Showing last \(limit / 1000)K of \(text.count / 1000)K characters — show all") { expanded = true }
-                    .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Color.accentColor)
+                    .buttonStyle(.plain).font(.system(size: 11.5)).foregroundStyle(Color.primary)
             }
             ScrollView([.vertical, .horizontal]) {
                 Text(shown).font(Theme.mono(12)).textSelection(.enabled).fixedSize(horizontal: true, vertical: true)

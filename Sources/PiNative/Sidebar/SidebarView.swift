@@ -75,7 +75,7 @@ struct SidebarView: View {
                             Divider()
                             Button("Manage tags…") { ui.activeSheet = .tags }
                         } label: { Image(systemName: "ellipsis").font(.system(size: 11)).foregroundStyle(.tertiary).frame(width: 22, height: 22) }
-                            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 26).padding(.top, 10)
+                            .menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).frame(width: 26).padding(.top, 10)
                     }
                     ForEach(model.sidebar.projects.filter(projectMatches)) { g in projectSection(g) }
                     if !model.sidebar.archived.isEmpty && tagFilter.isEmpty {
@@ -269,7 +269,7 @@ struct ProjectHeader: View {
             Spacer(minLength: 0)
             if hover {
                 Menu { menuItems } label: { Image(systemName: "ellipsis").font(.system(size: 12)).frame(width: 22, height: 22) }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22)
+                    .menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).frame(width: 22)
                 Button(action: newThread) { Image(systemName: "square.and.pencil").font(.system(size: 12)) }
                     .buttonStyle(HoverButtonStyle(size: 22, radius: 6)).help("New thread in \(group.name)")
             }

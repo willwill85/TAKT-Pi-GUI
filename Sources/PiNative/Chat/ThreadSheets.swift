@@ -33,10 +33,10 @@ struct SessionTreeSheet: View {
                             HStack(spacing: 8) {
                                 Color.clear.frame(width: CGFloat(min(n.depth, 12)) * 14)
                                 Image(systemName: n.role == "user" ? "person.fill" : n.role == "assistant" ? "sparkle" : n.role == "toolResult" ? "wrench.and.screwdriver" : "circle.dotted").font(.system(size: 10.5)).frame(width: 14)
-                                    .foregroundStyle(n.onActivePath ? Color.accentColor : Color.secondary)
+                                    .foregroundStyle(n.onActivePath ? Color.primary : Color.secondary)
                                 Text(n.preview).font(.system(size: 12.5)).lineLimit(1).foregroundStyle(n.onActivePath ? Color.primary : Color.secondary)
                                 Spacer()
-                                if n.id == leaf { Text("current").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Color.accentColor) }
+                                if n.id == leaf { Text("current").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Color.primary) }
                             }
                             .padding(.horizontal, 10).frame(height: 26)
                             .background(RoundedRectangle(cornerRadius: 6).fill(n.id == leaf ? Color.accentColor.opacity(0.12) : .clear))
