@@ -137,13 +137,22 @@ public final class SessionStore {
 
     /// Reloads when the session file changed under us, so a turn finished in pi-web (or another
     /// window) shows up here without reopening the thread. Skipped while this window is streaming.
+    /// Pulls the thread again when the file changed on disk, whoever wrote it. An event stream only reports
+    /// the runs this window started, so a turn written from another window (pi-gui, pi-web) is found here.
+    /// A thread that is streaming here is left alone: its live tail is newer than the file until the run ends.
     public func syncIfChanged() async {
-        guard !isRunning, !isLoading else { return }
+        guard !isLoading, !isStreamingHere else { return }
         guard let d = try? await client.get("/api/sessions/\(sessionId)", query: ["tail": "1"]) else { return }
-        let rev = d["snapshotRevision"]?.string
-        guard let rev, rev != snapshotRevision else { return }
-        await load()
+        guard let rev = d["snapshotRevision"]?.string else { return }
+        switch SyncDecision.decide(known: snapshotRevision, current: rev) {
+        case .recordOnly: snapshotRevision = rev
+        case .reload: await load()
+        case .none: break
+        }
     }
+
+    /// True only while this window is receiving the live tail of a run it can see.
+    private var isStreamingHere: Bool { isRunning && streaming.message != nil }
 
     public func loadOlder() async {
         guard hasMore, !isLoading, let oldest = entryIds.first else { return }
@@ -499,5 +508,15 @@ public final class SessionStore {
     /// Tool result for a call id, from loaded or live messages.
     public func result(for callId: String) -> Message? {
         liveToolResults[callId] ?? messages.last { $0.role == .toolResult && $0.toolCallId == callId }
+    }
+}
+
+/// When an open thread should reload after the server reports a revision. Pure, so it is tested directly.
+public enum SyncDecision: Equatable, Sendable {
+    case none, recordOnly, reload
+
+    public static func decide(known: String?, current: String) -> SyncDecision {
+        guard let known else { return .recordOnly }   // first sight: remember it, nothing to compare yet
+        return known == current ? .none : .reload
     }
 }

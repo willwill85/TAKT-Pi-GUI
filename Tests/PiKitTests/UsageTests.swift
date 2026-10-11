@@ -70,3 +70,16 @@ final class WorkspaceGitIndexTests: XCTestCase {
         XCTAssertEqual(ws.changedDirectoryPaths.count, 1 + 50 * 2)
     }
 }
+
+final class SyncDecisionTests: XCTestCase {
+    func testFirstSightRecordsWithoutReloading() {
+        XCTAssertEqual(SyncDecision.decide(known: nil, current: "r1"), .recordOnly)
+    }
+    func testSameRevisionDoesNothing() {
+        XCTAssertEqual(SyncDecision.decide(known: "r1", current: "r1"), .none)
+    }
+    func testChangedRevisionReloads() {
+        // A turn written from another window changes the revision; the open thread must pick it up.
+        XCTAssertEqual(SyncDecision.decide(known: "r1", current: "r2"), .reload)
+    }
+}
