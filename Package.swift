@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "PiKit", targets: ["PiKit"]),
         .executable(name: "PiNative", targets: ["PiNative"]),
+        .executable(name: "IconGen", targets: ["IconGen"]),
     ],
     dependencies: [
         .package(url: "https://github.com/gonzalezreal/textual", from: "0.1.0"),
@@ -15,10 +16,12 @@ let package = Package(
     ],
     targets: [
         .target(name: "PiKit", path: "Sources/PiKit"),
+        .target(name: "PiBrand", path: "Sources/PiBrand"),
+        .executableTarget(name: "IconGen", dependencies: ["PiBrand"], path: "Sources/IconGen"),
         .executableTarget(
             name: "PiNative",
             dependencies: [
-                "PiKit",
+                "PiKit", "PiBrand",
                 .product(name: "Textual", package: "textual"),
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "Highlightr", package: "Highlightr"),

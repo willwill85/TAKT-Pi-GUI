@@ -4,13 +4,23 @@ import PiKit
 
 struct MarkdownText: View {
     let text: String
-    var size: CGFloat = 14
+    var size: CGFloat?
+    var cwd: String?
+    var sessionId: String?
+    var linkPaths = true
+    @AppStorage("chatFontSize") private var chatFont = 14.0
+    @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
-        StructuredText(markdown: text, syntaxExtensions: [.math])
+        let size = self.size ?? CGFloat(chatFont)
+        let loader = PiImageLoader(files: model.files, client: model.client, cwd: cwd ?? model.workspace.cwd, sessionId: sessionId)
+        StructuredText(markdown: linkPaths ? PathLinker.linkify(text) : text, syntaxExtensions: [.math])
             .font(.system(size: size))
             .lineSpacing(size * 0.45)
             .textual.structuredTextStyle(.gitHub)
+            .textual.imageAttachmentLoader(loader)
             .textual.textSelection(.enabled)
+            .handlesPathLinks(cwd: cwd)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -29,7 +39,7 @@ struct UserBubble: View {
             VStack(alignment: .trailing, spacing: 8) {
                 let images = message.blocks.compactMap { b -> ImageRef? in if case .image(let i) = b { return i } else { return nil } }
                 if !images.isEmpty {
-                    HStack(spacing: 6) { ForEach(Array(images.enumerated()), id: \.offset) { _, img in ImageThumb(image: img, size: 120) } }
+                    HStack(spacing: 6) { ForEach(Array(images.enumerated()), id: \.offset) { _, img in ImageThumbView(source: .ref(img), width: images.count == 1 ? 280 : 150, maxHeight: images.count == 1 ? 300 : 150) } }
                 }
                 if !message.text.isEmpty {
                     Text(message.text)
@@ -46,29 +56,16 @@ struct UserBubble: View {
     }
 }
 
-struct ImageThumb: View {
-    let image: ImageRef
-    var size: CGFloat = 120
-    @Environment(AppModel.self) private var model
-    var body: some View {
-        Group {
-            if let d = image.data, let data = Data(base64Encoded: d), let ns = NSImage(data: data) {
-                Image(nsImage: ns).resizable().scaledToFill()
-            } else if let u = image.url, let client = model.client {
-                AsyncImage(url: u.hasPrefix("http") ? URL(string: u) : client.url(u)) { $0.resizable().scaledToFill() } placeholder: { Color.secondary.opacity(0.15) }
-            } else { Color.secondary.opacity(0.15) }
-        }
-        .frame(width: size, height: size).clipShape(RoundedRectangle(cornerRadius: 10)).hairline(radius: 10)
-    }
-}
-
 struct AssistantText: View {
     let text: String
     let live: Bool
+    var cwd: String?
+    var sessionId: String?
     @State private var hover = false
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            MarkdownText(text: text)
+            MarkdownText(text: text, cwd: cwd, sessionId: sessionId)
+            if !live { ReferencedImages(text: text, cwd: cwd, sessionId: sessionId) }
             if hover && !live {
                 Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) } label: {
                     Image(systemName: "doc.on.doc").font(.system(size: 11.5)).foregroundStyle(.tertiary)
@@ -113,7 +110,7 @@ struct ChangesCard: View {
                 Text("+\(add)").foregroundStyle(Theme.added).font(.system(size: 12.5, weight: .medium))
                 Text("−\(del)").foregroundStyle(Theme.removed).font(.system(size: 12.5, weight: .medium))
                 Spacer()
-                Button("Review") { withAnimation(.snappy(duration: 0.22)) { ui.rightPanelVisible = true; ui.rightTab = .review } }
+                Button("Review") { ui.showPanel(.review) }
                     .buttonStyle(.plain).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Color.accentColor)
             }.padding(.horizontal, 14).padding(.vertical, 10)
             ForEach(files.prefix(12)) { f in

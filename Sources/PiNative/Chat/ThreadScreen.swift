@@ -20,6 +20,7 @@ struct ThreadScreen: View {
 
 struct BottomArea: View {
     let store: SessionStore
+    @AppStorage("chatWidth") private var chatWidth = 760.0
     @Environment(AppModel.self) private var model
     var body: some View {
         VStack(spacing: 8) {
@@ -31,7 +32,7 @@ struct BottomArea: View {
             ComposerView(draftKey: store.sessionId, store: store)
             ForEach(store.widgets.filter { $0.placement == "belowEditor" }) { w in WidgetView(widget: w) }
         }
-        .frame(maxWidth: Theme.columnWidth)
+        .frame(maxWidth: CGFloat(chatWidth))
         .padding(.horizontal, 24).padding(.bottom, 12).padding(.top, 4)
         .frame(maxWidth: .infinity)
     }
@@ -77,7 +78,8 @@ struct ThreadHeader: View {
 
     var body: some View {
         let title = (model.sessions.first { $0.id == store.sessionId } ?? store.info)?.title ?? "Thread"
-        HStack(spacing: 10) {
+        let ws = model.workspace
+        HStack(spacing: 8) {
             if !ui.sidebarVisible {
                 Button { withAnimation(.snappy(duration: 0.22)) { ui.sidebarVisible = true } } label: { Image(systemName: "sidebar.left").font(.system(size: 14)).foregroundStyle(.secondary) }
                     .buttonStyle(HoverButtonStyle()).help("Show sidebar (⌘B)").padding(.leading, 74)
@@ -87,14 +89,44 @@ struct ThreadHeader: View {
             if let cwd = store.info?.cwd {
                 Text(SidebarModel.folderName(cwd)).font(.system(size: 12.5)).foregroundStyle(.tertiary).lineLimit(1).help(cwd)
             }
+            ForEach(model.tagState.tags(forSession: store.sessionId).prefix(3)) { TagChip(tag: $0, small: true) }
             if store.isRunning { SpinnerView(size: 11) }
             Spacer()
+            if let w = ws.worktree, w.isGit, let cur = w.worktrees.first(where: { $0.path == w.currentPath }) ?? w.worktrees.first {
+                Chip { HStack(spacing: 4) { Image(systemName: "arrow.triangle.branch").foregroundStyle(cur.isMain ? Color.secondary : Color.accentColor); Text(cur.branch ?? "detached").font(.system(size: 12, design: .monospaced)) } }
+                    .help(w.currentPath ?? "")
+            }
+            if let cwd = store.info?.cwd {
+                Menu {
+                    Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: cwd)]) }
+                    Button("Open in Terminal") { NSWorkspace.shared.open([URL(fileURLWithPath: cwd)], withApplicationAt: URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"), configuration: NSWorkspace.OpenConfiguration()) }
+                    Button("Open in VS Code") { if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.microsoft.VSCode") { NSWorkspace.shared.open([URL(fileURLWithPath: cwd)], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) } }
+                } label: { Image(systemName: "arrow.up.forward.app").font(.system(size: 13)).frame(width: 26, height: 26) }.menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 30).help("Open in…")
+            }
+            Button { ui.showPanel(.terminal) } label: { Image(systemName: "terminal").font(.system(size: 13.5)).foregroundStyle(ws.tab == .terminal && ui.rightPanelVisible ? Color.accentColor : .secondary) }
+                .buttonStyle(HoverButtonStyle()).help("Terminal")
+            Button { ui.showPanel(.review) } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "plusminus.circle").font(.system(size: 13.5))
+                    if !ws.git.files.isEmpty { Text("+\(ws.git.additions)").foregroundStyle(Theme.added); Text("−\(ws.git.deletions)").foregroundStyle(Theme.removed) }
+                }.font(.system(size: 12, weight: .medium)).foregroundStyle(ws.tab == .review && ui.rightPanelVisible ? Color.accentColor : .secondary).padding(.horizontal, 4)
+            }.buttonStyle(HoverButtonStyle()).help("Review changes")
             Menu {
                 Button("Rename…") { nameDraft = title; renaming = true }
                 Button("Fork") { Task { await model.fork(store.sessionId) } }
                 Button("Generate Title") { Task { await model.autoName(store.sessionId) } }
                 Divider()
-                Button("Reveal Folder in Finder") { if let c = store.info?.cwd { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: c)]) } }
+                Button("Conversation Tree…") { ui.activeSheet = .sessionTree(store.sessionId) }
+                Button("System Prompt & Tools…") { ui.activeSheet = .systemPrompt(store.sessionId) }
+                if let key = (model.sessions.first { $0.id == store.sessionId })?.projectKey { Button("Project Settings…") { ui.activeSheet = .projectSettings(key) } }
+                if !model.tagState.tags.isEmpty {
+                    Menu("Tags") {
+                        ForEach(model.tagState.tags) { t in
+                            Toggle(t.name, isOn: Binding(get: { model.tagState.sessionAssignments[store.sessionId]?.contains(t.id) ?? false }, set: { _ in Task { await model.toggleSessionTag(store.sessionId, tag: t.id) } }))
+                        }
+                    }
+                }
+                Divider()
                 Button("Copy Session ID") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(store.sessionId, forType: .string) }
                 Button("Export as HTML…") { exportHTML() }
             } label: { Image(systemName: "ellipsis").font(.system(size: 14)).frame(width: 26, height: 26) }
@@ -122,6 +154,7 @@ struct ThreadHeader: View {
 
 struct MessageList: View {
     let store: SessionStore
+    @AppStorage("chatWidth") private var chatWidth = 760.0
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
 
@@ -136,13 +169,13 @@ struct MessageList: View {
                                 .frame(maxWidth: .infinity).padding(.vertical, 6)
                         }.buttonStyle(.plain)
                     }
-                    ForEach(items) { item in ItemView(item: item) }
+                    ForEach(items) { item in ItemView(item: item, cwd: store.info?.cwd, sessionId: store.sessionId) }
                     if store.isRunning && store.streaming.message == nil && showWaiting(items) {
                         HStack(spacing: 8) { SpinnerView(size: 11); Text(phaseLabel).font(.system(size: 13)).foregroundStyle(.secondary).modifier(ShimmerIf(active: true)) }.id("waiting")
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
-                .frame(maxWidth: Theme.columnWidth)
+                .frame(maxWidth: CGFloat(chatWidth))
                 .padding(.horizontal, 24).padding(.vertical, 20)
                 .frame(maxWidth: .infinity)
             }
@@ -179,10 +212,12 @@ struct MessageList: View {
 
 struct ItemView: View {
     let item: ThreadItem
+    var cwd: String?
+    var sessionId: String?
     var body: some View {
         switch item {
         case .user(let m): UserBubble(message: m).padding(.top, 6)
-        case .text(_, let t, let live, _): AssistantText(text: t, live: live)
+        case .text(_, let t, let live, _): AssistantText(text: t, live: live, cwd: cwd, sessionId: sessionId)
         case .work(_, let entries, let live): WorkGroupView(entries: entries, live: live)
         case .bash(let m): BashMessageCard(message: m)
         case .custom(let m): CustomMessageCard(message: m)

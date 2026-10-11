@@ -3,21 +3,52 @@ import AppKit
 import UserNotifications
 import PiKit
 
-enum RightTab: String, CaseIterable { case review = "Review", files = "Files", terminal = "Terminal" }
+enum AppSheet: Identifiable, Hashable {
+    case projectSettings(String)
+    case tags
+    case automations
+    case sessionTree(String)
+    case systemPrompt(String)
+    var id: String { switch self { case .projectSettings(let k): return "p" + k; case .tags: return "tags"; case .automations: return "auto"; case .sessionTree(let i): return "tree" + i; case .systemPrompt(let i): return "sp" + i } }
+}
 
+enum FilePlacement: String { case panel, sidebar }
+
+@MainActor
 @Observable
 final class UIState {
-    var rightTab: RightTab = .review
-    var openFilePaths: [String] = []
-    var selectedFile: String?
-    func openFile(_ path: String) {
-        if !openFilePaths.contains(path) { openFilePaths.append(path) }
-        selectedFile = path
+    weak var model: AppModel?
+    var lightbox: LightboxItem?
+    var mentionRequest: String?
+    var filePlacement: FilePlacement = FilePlacement(rawValue: UserDefaults.standard.string(forKey: "filePlacement") ?? "") ?? .panel {
+        didSet { UserDefaults.standard.set(filePlacement.rawValue, forKey: "filePlacement"); if filePlacement == .sidebar, model?.workspace.tab == .files { model?.workspace.tab = .review } }
+    }
+    var filesSectionHeight: CGFloat = {
+        let v = UserDefaults.standard.double(forKey: "filesSectionHeight"); return v > 0 ? CGFloat(v) : 280
+    }() { didSet { UserDefaults.standard.set(Double(filesSectionHeight), forKey: "filesSectionHeight") } }
+    var filesSectionCollapsed: Bool = UserDefaults.standard.bool(forKey: "filesSectionCollapsed") {
+        didSet { UserDefaults.standard.set(filesSectionCollapsed, forKey: "filesSectionCollapsed") }
+    }
+    var activeSheet: AppSheet?
+
+    func openFile(_ path: String, line: Int? = nil) {
+        model?.workspace.open(path, line: line)
         withAnimation(.snappy(duration: 0.22)) { rightPanelVisible = true }
     }
-    func closeFile(_ path: String) {
-        openFilePaths.removeAll { $0 == path }
-        if selectedFile == path { selectedFile = openFilePaths.last }
+    func openDirectory(_ path: String) {
+        guard let ws = model?.workspace else { return }
+        ws.expanded.insert(path); Task { await ws.loadDir(path) }
+        if filePlacement == .panel { showPanel(.files) } else { filesSectionCollapsed = false }
+    }
+    func showPanel(_ tab: PanelTab) {
+        model?.workspace.tab = tab
+        withAnimation(.snappy(duration: 0.22)) { rightPanelVisible = true }
+    }
+    func attachMention(_ path: String) {
+        var p = path
+        if let cwd = model?.workspace.cwd, p.hasPrefix(cwd + "/") { p = String(p.dropFirst(cwd.count + 1)) }
+        mentionRequest = p
+        focusComposer += 1
     }
     var sidebarVisible = true
     var sidebarWidth: CGFloat = 280
@@ -68,6 +99,7 @@ struct PiNativeApp: App {
                 .preferredColorScheme(ui.colorScheme)
                 .frame(minWidth: 960, minHeight: 640)
                 .onAppear {
+                    ui.model = model
                     delegate.model = model
                     model.start(mode: Self.connectionMode(), serverOverride: UserDefaults.standard.string(forKey: "serverDirectory"))
                     Notifier.shared.setup(model: model, ui: ui)

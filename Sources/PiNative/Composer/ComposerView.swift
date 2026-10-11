@@ -88,6 +88,11 @@ struct ComposerView: View {
         .task { text = DraftStore.shared.get(draftKey); caret = text.count; await loadFileIndex() }
         .onChange(of: text) { _, new in DraftStore.shared.set(draftKey, new) }
         .onChange(of: cwd) { _, _ in Task { await loadFileIndex() } }
+        .onChange(of: ui.mentionRequest) { _, v in
+            guard let v else { return }
+            let sep = text.isEmpty || text.hasSuffix(" ") || text.hasSuffix("\n") ? "" : " "
+            text += sep + "@" + v + " "; caret = text.count; ui.mentionRequest = nil
+        }
         .onChange(of: store?.editorTextRequest) { _, v in if let v { text = v; caret = v.count; store?.editorTextRequest = nil } }
     }
 

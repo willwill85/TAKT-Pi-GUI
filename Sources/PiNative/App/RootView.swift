@@ -50,6 +50,16 @@ struct MainView: View {
         }
         .ignoresSafeArea()
         .sheet(isPresented: $ui.searchOpen) { SearchPalette() }
+        .sheet(item: $ui.lightbox) { LightboxView(item: $0) }
+        .sheet(item: $ui.activeSheet) { sheet in
+            switch sheet {
+            case .tags: TagsManagerSheet()
+            case .projectSettings(let key): ProjectSettingsSheet(projectKey: key)
+            case .automations: AutomationsView().frame(width: 760, height: 560)
+            case .sessionTree(let id): SessionTreeSheet(sessionId: id)
+            case .systemPrompt(let id): SystemPromptSheet(sessionId: id)
+            }
+        }
         .overlay(alignment: .bottom) { ToastView() }
     }
 }
@@ -62,6 +72,8 @@ struct DetailView: View {
             if let store = model.store(for: id) { ThreadScreen(store: store).id(id) } else { Color.clear }
         case .newThread:
             NewThreadScreen()
+        case .automations:
+            AutomationsView()
         }
     }
 }

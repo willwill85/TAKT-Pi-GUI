@@ -4,6 +4,7 @@ import Observation
 public enum Selection: Hashable, Sendable {
     case thread(String)
     case newThread
+    case automations
 }
 
 public struct ModelCatalog: Sendable {
@@ -32,12 +33,16 @@ public final class AppModel {
     public private(set) var catalog = ModelCatalog()
     public private(set) var sessionsLoaded = false
     public var selection: Selection = .newThread
-    public var newThreadCwd: String?
+    public var newThreadCwd: String? { didSet { if selection == .newThread, oldValue != newThreadCwd { syncWorkspace() } } }
     public var newThreadModel: ModelRef?
     public var newThreadThinking: String?
     public var toast: String?
     public var unread: Set<String> = []
     public var homeDirectory = NSHomeDirectory()
+    public let workspace = WorkspaceModel()
+    public private(set) var tagState = TagState()
+    public private(set) var appUpdate: (current: String, latest: String, available: Bool)?
+    public private(set) var piVersion: String?
 
     /// Fired when any session finishes a run: (store, aborted).
     public var onRunFinished: ((SessionStore, Bool) -> Void)?
@@ -68,6 +73,7 @@ public final class AppModel {
             if case .ready(let ep) = sidecar.state {
                 if !connected || client?.endpoint != ep {
                     client = APIClient(endpoint: ep); connected = true
+                    workspace.configure(client: client)
                     await bootstrap()
                 }
             } else if connected { connected = false }
@@ -80,8 +86,11 @@ public final class AppModel {
     private func bootstrap() async {
         if let h = try? await client?.get("/api/home"), let p = h["home"]?.string { homeDirectory = p }
         await refreshSessions()
+        await refreshTags()
         sessionsLoaded = true
+        Task { await checkUpdate() }
         if newThreadCwd == nil { newThreadCwd = sessions.first?.cwd ?? homeDirectory }
+        syncWorkspace()
         await loadModels(cwd: newThreadCwd)
         pollTask?.cancel()
         pollTask = Task { [weak self] in
@@ -127,6 +136,41 @@ public final class AppModel {
         } else if changed { rebuildSidebar() }
     }
 
+    // MARK: Tags
+
+    public func refreshTags() async {
+        guard let client, let d = try? await client.get("/api/project-tags") else { return }
+        tagState = TagState(json: d)
+    }
+
+    @discardableResult
+    public func tagAction(_ body: [String: Any]) async -> String? {
+        guard let client else { return "Not connected" }
+        do { let d = try await client.post("/api/project-tags", body: body); tagState = TagState(json: d); return nil }
+        catch { return error.localizedDescription }
+    }
+
+    public func toggleProjectTag(_ key: String, tag: String) async {
+        var ids = tagState.projectAssignments[key] ?? []
+        if let i = ids.firstIndex(of: tag) { ids.remove(at: i) } else { ids.append(tag) }
+        tagState.projectAssignments[key] = ids
+        await tagAction(["action": "assign", "projectKey": key, "tagIds": ids])
+    }
+
+    public func toggleSessionTag(_ id: String, tag: String) async {
+        var ids = tagState.sessionAssignments[id] ?? []
+        if let i = ids.firstIndex(of: tag) { ids.remove(at: i) } else { ids.append(tag) }
+        tagState.sessionAssignments[id] = ids
+        await tagAction(["action": "assign-session", "sessionId": id, "tagIds": ids])
+    }
+
+    // MARK: Updates
+
+    public func checkUpdate() async {
+        guard let client, let d = try? await client.get("/api/app-update") else { return }
+        appUpdate = (d["currentVersion"]?.string ?? "", d["latestVersion"]?.string ?? "", d["updateAvailable"]?.bool ?? false)
+    }
+
     // MARK: Models
 
     public func loadModels(cwd: String?) async {
@@ -169,12 +213,24 @@ public final class AppModel {
         if case .thread(let id) = selection { return store(for: id) } else { return nil }
     }
 
+    public var files: FileService? { workspace.fileService }
+
+    func syncWorkspace() {
+        switch selection {
+        case .thread(let id): workspace.setCwd(sessions.first { $0.id == id }?.cwd ?? stores[id]?.info?.cwd)
+        case .newThread: workspace.setCwd(newThreadCwd)
+        case .automations: break
+        }
+        if case .thread(let id) = selection { workspace.sessionId = id } else { workspace.sessionId = nil }
+    }
+
     public func select(_ id: String) {
         if case .thread(let cur) = selection, cur != id, let old = stores[cur], !old.isRunning { old.disconnect() }
         selection = .thread(id)
         unread.remove(id)
         guard let s = store(for: id) else { return }
         if let cwd = s.info?.cwd ?? sessions.first(where: { $0.id == id })?.cwd { newThreadCwd = cwd }
+        syncWorkspace()
         Task {
             await s.load()
             s.connect()
@@ -183,10 +239,20 @@ public final class AppModel {
         }
     }
 
+    /// Makes `root` the folder the side panel works on (when no thread of it is open).
+    public func startNewThreadContextIfNeeded(_ root: String) {
+        if case .thread(let id) = selection, sessions.first(where: { $0.id == id })?.projectRoot == root { return }
+        newThreadCwd = root
+        if selection != .newThread { workspace.setCwd(root) }
+    }
+
+    public func showAutomations() { selection = .automations }
+
     public func startNewThread(cwd: String? = nil) {
         if let cwd { newThreadCwd = cwd }
         if case .thread(let cur) = selection, let old = stores[cur], !old.isRunning { old.disconnect() }
         selection = .newThread
+        syncWorkspace()
         Task { await loadModels(cwd: newThreadCwd) }
     }
 
@@ -206,6 +272,7 @@ public final class AppModel {
             }
             stores[sid] = s
             selection = .thread(sid)
+            syncWorkspace()
             s.connect()
             await s.refreshState()
             await s.loadCommands()
@@ -235,6 +302,41 @@ public final class AppModel {
     }
     public func renameProject(_ g: ProjectGroup, to name: String?) async {
         await uiPost(["action": "rename-project", "projectKey": g.key, "name": name as Any? ?? NSNull()])
+    }
+
+    public func moveProject(_ g: ProjectGroup, up: Bool) async {
+        let band = sidebar.projects.filter { $0.pinned == g.pinned }
+        guard let i = band.firstIndex(where: { $0.key == g.key }) else { return }
+        let j = up ? i - 1 : i + 1
+        guard band.indices.contains(j) else { return }
+        let unsaved = band.map(\.key).filter { !ui.projectOrder.contains($0) }
+        await uiPost(["action": "move-project", "projectKey": g.key, "anchorKey": band[j].key, "position": up ? "before" : "after", "add": unsaved])
+    }
+
+    public func canMoveProject(_ g: ProjectGroup, up: Bool) -> Bool {
+        let band = sidebar.projects.filter { $0.pinned == g.pinned }
+        guard let i = band.firstIndex(where: { $0.key == g.key }) else { return false }
+        return band.indices.contains(up ? i - 1 : i + 1)
+    }
+
+    public func archiveOlderThanWeek(_ g: ProjectGroup) async {
+        let cutoff = Date().addingTimeInterval(-7 * 86400)
+        let ids = g.families.filter { $0.latest < cutoff && $0.pinnedAt == nil && !running.contains($0.id) }.map(\.id)
+        guard !ids.isEmpty else { return }
+        await uiPost(["action": "set", "ids": ids, "archived": true])
+        toast = "Archived \(ids.count) older thread\(ids.count == 1 ? "" : "s")"
+    }
+
+    public func olderThanWeekCount(_ g: ProjectGroup) -> Int {
+        let cutoff = Date().addingTimeInterval(-7 * 86400)
+        return g.families.filter { $0.latest < cutoff && $0.pinnedAt == nil && !running.contains($0.id) }.count
+    }
+
+    public func removeProjectFromList(_ g: ProjectGroup) async {
+        let ids = g.families.filter { !running.contains($0.id) }.map(\.id)
+        guard !ids.isEmpty else { return }
+        await uiPost(["action": "set", "ids": ids, "archived": true])
+        toast = "Removed “\(g.name)” from the list"
     }
 
     public func rename(_ id: String, to name: String) async {

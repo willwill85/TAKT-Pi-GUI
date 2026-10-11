@@ -128,8 +128,15 @@ struct ToolRow: View {
             }.buttonStyle(.plain)
             if open || (failed && !entry.isRunning) {
                 ToolDetails(entry: entry, presentation: p).padding(.leading, 24).padding(.bottom, 6).transition(.opacity)
+            } else if let imgs = resultImages, !imgs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { ForEach(Array(imgs.enumerated()), id: \.offset) { _, img in ImageThumbView(source: .ref(img), width: 260, maxHeight: 220) } } }
+                    .padding(.leading, 24).padding(.bottom, 6)
             }
         }
+    }
+
+    private var resultImages: [ImageRef]? {
+        entry.result?.blocks.compactMap { b -> ImageRef? in if case .image(let i) = b { return i } else { return nil } }
     }
 
     @ViewBuilder private func targetView(_ p: ToolPresentation) -> some View {
@@ -181,8 +188,9 @@ struct ToolDetails: View {
                 }
                 if !out.isEmpty { OutputBlock(text: out, maxHeight: 280).padding(10).background(RoundedRectangle(cornerRadius: 8).fill(Theme.codeBackground)).hairline(radius: 8) }
             }
-            ForEach(Array((entry.result?.blocks ?? []).enumerated()), id: \.offset) { _, b in
-                if case .image(let img) = b { ImageThumb(image: img, size: 220) }
+            let imgs = (entry.result?.blocks ?? []).compactMap { b -> ImageRef? in if case .image(let i) = b { return i } else { return nil } }
+            if !imgs.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { ForEach(Array(imgs.enumerated()), id: \.offset) { _, img in ImageThumbView(source: .ref(img), width: 260, maxHeight: 220) } } }
             }
         }
     }
