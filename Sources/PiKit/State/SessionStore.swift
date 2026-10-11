@@ -114,9 +114,18 @@ public final class SessionStore {
             let ids = (ctx["entryIds"]?.array ?? []).map { $0.string ?? "" }
             // While streaming, don't clobber the optimistic tail with a stale file read.
             if !isRunning || streaming.message == nil {
-                messages = msgs.enumerated().map { Message(json: $1, id: ids.indices.contains($0) ? ids[$0] : nil) }
-                entryIds = ids
-                hasMore = ctx["hasMore"]?.bool ?? false
+                let fresh = msgs.enumerated().map { Message(json: $1, id: ids.indices.contains($0) ? ids[$0] : nil) }
+                // Everything the user already paged in ("Load earlier messages") sits before the newest
+                // window. A refresh replaces only that window, so older history is never dropped.
+                if let firstId = ids.first, let cut = entryIds.firstIndex(of: firstId), cut > 0 {
+                    messages = Array(messages.prefix(cut)) + fresh
+                    entryIds = Array(entryIds.prefix(cut)) + ids
+                } else {
+                    messages = fresh
+                    entryIds = ids
+                }
+                // "hasMore" stays true while there is older history left to page in.
+                hasMore = hasMore || (ctx["hasMore"]?.bool ?? false)
             }
             if let m = ctx["model"], let p = m["provider"]?.string, let mid = m["modelId"]?.string { model = ModelRef(provider: p, modelId: mid) }
             if let t = ctx["thinkingLevel"]?.string { thinkingLevel = t }

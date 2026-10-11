@@ -113,3 +113,16 @@ public struct PriceTiers: Sendable {
     }
     public func price(_ key: String) -> ModelPrice? { prices[key] }
 }
+
+/// One installed component and whether a newer version exists for it.
+public struct UpdateItem: Identifiable, Hashable, Sendable {
+    public var id: String
+    public var name: String
+    /// "npm": updated with `pi update`. "git": pi-web, merged from upstream.
+    public var kind: String
+    public var current: String
+    public var latest: String?
+    public var available: Bool
+    public var detail: String?
+    public var error: String?
+}

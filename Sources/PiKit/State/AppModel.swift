@@ -53,6 +53,10 @@ public final class AppModel {
     public private(set) var accountUsageLoading = false
     public private(set) var priceTiers = PriceTiers()
     public private(set) var piUpdate: (current: String, latest: String, available: Bool)?
+    /// Every component this install uses (pi, remote-pi, pi-web), with installed and latest versions.
+    public private(set) var updates: [UpdateItem] = []
+    public private(set) var updatingIds: Set<String> = []
+    public private(set) var updatesCheckedAt: Date?
     public private(set) var piChecking = false
     public private(set) var piUpgrading = false
     public var piUpdateMessage: String?
@@ -230,6 +234,7 @@ public final class AppModel {
         piUpdateTask = Task { [weak self] in
             while let self, !Task.isCancelled {
                 await self.checkPiUpdate(force: false)
+                await self.checkUpdates(force: false)
                 try? await Task.sleep(for: .seconds(6 * 3600))
             }
         }
@@ -246,6 +251,36 @@ public final class AppModel {
             if force { piUpdateMessage = (piUpdate?.available == true) ? nil : "Pi is up to date." }
         } catch {
             if force { piUpdateMessage = "Update check failed: \(error.localizedDescription)" }
+        }
+    }
+
+    /// Checks pi, remote-pi and pi-web together. Results are cached on the server for six hours.
+    public func checkUpdates(force: Bool = false) async {
+        guard let client else { return }
+        piChecking = true; defer { piChecking = false }
+        guard let d = try? await client.get("/api/updates", query: force ? ["force": "1"] : [:]) else { return }
+        updates = (d["items"]?.array ?? []).compactMap { j in
+            guard let id = j["id"]?.string else { return nil }
+            return UpdateItem(id: id, name: j["name"]?.string ?? id, kind: j["kind"]?.string ?? "npm",
+                              current: j["current"]?.string ?? "", latest: j["latest"]?.string,
+                              available: j["available"]?.bool ?? false, detail: j["detail"]?.string, error: j["error"]?.string)
+        }
+        updatesCheckedAt = Date()
+        // The pi-only pill and card read the same data.
+        if let pi = updates.first(where: { $0.id == "pi" }) { piUpdate = (pi.current, pi.latest ?? "", pi.available) }
+    }
+
+    /// Applies one component's update, then refreshes the list. One at a time per component.
+    public func applyUpdate(_ id: String) async {
+        guard let client, !updatingIds.contains(id) else { return }
+        updatingIds.insert(id); piUpdateMessage = nil
+        defer { updatingIds.remove(id) }
+        do {
+            _ = try await client.post("/api/updates", body: ["id": id])
+            piUpdateMessage = "\(id) updated. Restart the app so new threads use it."
+            await checkUpdates(force: true)
+        } catch {
+            piUpdateMessage = "\(id) update failed: \(error.localizedDescription)"
         }
     }
 

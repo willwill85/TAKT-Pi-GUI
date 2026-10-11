@@ -100,27 +100,44 @@ struct TagsSettings: View {
 
 // MARK: - Pi version (periodic check + upgrade)
 
+/// Settings › General: pi, remote-pi and pi-web, each with its installed and latest version and an Update button.
 struct PiVersionCard: View {
     @Environment(AppModel.self) private var model
     var body: some View {
-        let u = model.piUpdate
-        SettingsCard(title: "Pi", footer: "Checked automatically every 6 hours. Upgrading runs `pi update self`; running threads keep the old version until restarted.") {
-            SettingsRow(title: u?.available == true ? "Update available" : "Pi version",
-                        subtitle: u.map { $0.available ? "v\($0.current) → v\($0.latest)" : "v\($0.current)" } ?? "Checking…",
-                        divider: model.piUpdateMessage != nil) {
-                HStack(spacing: 8) {
-                    Button(model.piChecking ? "Checking…" : "Check Now") { Task { await model.checkPiUpdate(force: true) } }
-                        .disabled(model.piChecking || model.piUpgrading)
-                    if let u, u.available {
-                        Button(model.piUpgrading ? "Upgrading…" : "Upgrade to v\(u.latest)") { Task { await model.upgradePi() } }
-                            .buttonStyle(.borderedProminent).disabled(model.piUpgrading)
+        SettingsCard(title: "Updates", footer: "Checked at launch and every 6 hours. pi and remote-pi update from npm; pi-web merges upstream when your fork has no local changes. Running threads keep the old code until restarted.") {
+            if model.updates.isEmpty {
+                SettingsRow(title: "Checking…", subtitle: nil, divider: false) { EmptyView() }
+            }
+            ForEach(Array(model.updates.enumerated()), id: \.element.id) { i, u in
+                SettingsRow(title: u.name,
+                            subtitle: rowSubtitle(u),
+                            divider: i < model.updates.count - 1 || model.piUpdateMessage != nil) {
+                    HStack(spacing: 8) {
+                        if let e = u.error { Text(e).font(.system(size: 11)).foregroundStyle(Theme.removed).lineLimit(1).frame(maxWidth: 180) }
+                        if u.available {
+                            Button(model.updatingIds.contains(u.id) ? "Updating…" : "Update") { Task { await model.applyUpdate(u.id) } }
+                                .buttonStyle(.borderedProminent).controlSize(.small).disabled(model.updatingIds.contains(u.id))
+                        } else {
+                            Text("up to date").font(.system(size: 12)).foregroundStyle(.tertiary)
+                        }
                     }
                 }
             }
+            HStack {
+                Button(model.piChecking ? "Checking…" : "Check Now") { Task { await model.checkUpdates(force: true) } }
+                    .controlSize(.small).disabled(model.piChecking)
+                Spacer()
+            }.padding(.horizontal, 14).padding(.vertical, 8)
             if let m = model.piUpdateMessage {
                 Text(m).font(.system(size: 12)).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.bottom, 10)
             }
         }
+    }
+
+    private func rowSubtitle(_ u: UpdateItem) -> String {
+        if u.available, let latest = u.latest { return "v\(u.current) → v\(latest)" + (u.detail.map { " · \($0)" } ?? "") }
+        if let d = u.detail { return "v\(u.current) · \(d)" }
+        return "v\(u.current)"
     }
 }
 
