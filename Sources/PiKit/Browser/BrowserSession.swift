@@ -34,17 +34,22 @@ public final class BrowserSession {
         proc.standardError = Pipe()
         do { try proc.run() } catch { status = error.localizedDescription; starting = false; return }
         process = proc
-        Task { [weak self] in
-            let data = pipe.fileHandleForReading.availableData
-            guard let line = String(data: data, encoding: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-                  let port = obj["port"] as? Int else {
-                self?.status = "Browser failed to start"; self?.starting = false; return
+        let handle = pipe.fileHandleForReading
+        // availableData blocks until the process closes the pipe, so it must not run on the main actor.
+        Task.detached { [weak self] in
+            let data = handle.availableData
+            let port = String(data: data, encoding: .utf8).flatMap { line -> Int? in
+                guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { return nil }
+                return obj["port"] as? Int
             }
-            self?.port = port
-            self?.starting = false
-            self?.status = "Ready"
-            self?.listen(port: port)
+            await MainActor.run {
+                guard let self else { return }
+                guard let port else { self.status = "Browser failed to start"; self.starting = false; return }
+                self.port = port
+                self.starting = false
+                self.status = "Ready"
+                self.listen(port: port)
+            }
         }
     }
 

@@ -461,7 +461,7 @@ struct SidebarFilesSection: View {
             if !ui.filesSectionCollapsed {
                 Rectangle().fill(Theme.separator).frame(height: 1)
                     .overlay(Color.clear.frame(height: 9).contentShape(Rectangle())
-                        .onHover { inside in if inside { NSCursor.resizeUpDown.push() } else { NSCursor.pop() } }
+                        .onHover { inside in if inside { NSCursor.resizeUpDown.set() } else { NSCursor.arrow.set() } }
                         .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { v in
                                 if dragStart == nil { dragStart = ui.filesSectionHeight }

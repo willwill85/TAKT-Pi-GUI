@@ -106,6 +106,8 @@ struct PiNativeApp: App {
                     delegate.model = model
                     model.start(mode: Self.connectionMode(), serverOverride: UserDefaults.standard.string(forKey: "serverDirectory"))
                     Notifier.shared.setup(model: model, ui: ui)
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.windows.first { $0.canBecomeMain }?.deminiaturize(nil)
                 }
         }
         .windowStyle(.hiddenTitleBar)

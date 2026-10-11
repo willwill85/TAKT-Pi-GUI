@@ -85,7 +85,7 @@ struct PanelResizer: View {
     var body: some View {
         Rectangle().fill(Theme.separator).frame(width: 1)
             .overlay(Color.clear.frame(width: 8).contentShape(Rectangle())
-                .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                .onHover { inside in if inside { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() } }
                 .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { v in
                         if start == nil { start = width }
@@ -101,7 +101,7 @@ struct SidebarResizer: View {
     var body: some View {
         Rectangle().fill(Theme.separator).frame(width: 1)
             .overlay(Color.clear.frame(width: 8).contentShape(Rectangle())
-                .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
+                .onHover { inside in if inside { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() } }
                 .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { v in
                         if start == nil { start = width }
