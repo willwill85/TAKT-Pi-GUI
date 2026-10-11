@@ -27,6 +27,10 @@ struct FilesPanel: View {
             .padding(.horizontal, 10).frame(height: 32)
             .background(RoundedRectangle(cornerRadius: 8).fill(Theme.surface)).padding(.horizontal, 10).padding(.vertical, 8)
 
+            if let cwd = ws.cwd, query.isEmpty, !ws.git.files.isEmpty {
+                ChangesSection(cwd: cwd)
+            }
+
             if let cwd = ws.cwd {
                 if !query.isEmpty {
                     List(results, id: \.self) { rel in
@@ -81,6 +85,68 @@ struct FilesPanel: View {
         let p = NSOpenPanel(); p.allowsMultipleSelection = true
         guard p.runModal() == .OK else { return }
         Task { try? await f.upload(p.urls, to: cwd); await model.workspace.loadDir(cwd) }
+    }
+}
+
+/// Mirrors the web explorer's change block: "N changed +add -del" then one row per changed file.
+/// A row opens that file's diff in the Review panel; hovering shows an @-mention button.
+struct ChangesSection: View {
+    let cwd: String
+    @Environment(AppModel.self) private var model
+    @Environment(UIState.self) private var ui
+
+    var body: some View {
+        let git = model.workspace.git
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Text("\(git.files.count) changed").font(.system(size: 12)).foregroundStyle(.secondary)
+                Text("+\(git.additions)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.green)
+                Text("-\(git.deletions)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.red)
+                Spacer()
+            }
+            .padding(.horizontal, 12).frame(height: 24)
+            ForEach(git.files) { c in
+                ChangeRow(change: c, cwd: cwd)
+            }
+            Rectangle().fill(Theme.separator).frame(height: 1).padding(.vertical, 4)
+        }
+        .padding(.horizontal, 6)
+    }
+}
+
+struct ChangeRow: View {
+    let change: GitChange
+    let cwd: String
+    @Environment(AppModel.self) private var model
+    @Environment(UIState.self) private var ui
+    @State private var hover = false
+
+    var body: some View {
+        let abs = (cwd as NSString).appendingPathComponent(change.path)
+        let name = (change.path as NSString).lastPathComponent
+        let dir = (change.path as NSString).deletingLastPathComponent
+        HStack(spacing: 6) {
+            Text(TreeRow.gitLetter(change)).font(.system(size: 10.5, weight: .semibold, design: .monospaced)).foregroundStyle(TreeRow.gitColor(change)).frame(width: 12)
+            FileIcon(path: change.path).frame(width: 14)
+            HStack(spacing: 0) {
+                if !dir.isEmpty && dir != "." { Text(dir + "/").font(.system(size: 12)).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head) }
+                Text(name).font(.system(size: 12)).lineLimit(1).fixedSize()
+            }
+            Spacer(minLength: 0)
+            if hover {
+                Button { ui.attachMention(abs) } label: { Image(systemName: "at").font(.system(size: 10.5)) }
+                    .buttonStyle(.plain).help("Insert @mention").foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 8).frame(height: 24)
+        .background(RoundedRectangle(cornerRadius: 5).fill(hover ? Theme.sidebarHover : .clear))
+        .contentShape(Rectangle())
+        .onHover { hover = $0 }
+        .onTapGesture {
+            model.workspace.reviewSelection = change.path
+            ui.showPanel(.review)
+        }
+        .help(change.path)
     }
 }
 
@@ -148,7 +214,7 @@ extension TreeRow {
         case "A", "U": return .green
         case "D": return .red
         case "R": return .purple
-        default: return .orange
+        default: return Theme.warning
         }
     }
 }
@@ -172,7 +238,7 @@ struct TreeRow: View {
                 .opacity(entry.hidden != nil ? 0.55 : 1)
             if entry.linkTarget != nil { Image(systemName: "arrow.turn.up.right").font(.system(size: 9)).foregroundStyle(.tertiary).help("Symlink: \(entry.linkTarget ?? "")") }
             Spacer(minLength: 0)
-            if containsChanges && gitStatus == nil { Circle().fill(Color.orange).frame(width: 5, height: 5).help("Contains changed files") }
+            if containsChanges && gitStatus == nil { Circle().fill(Theme.warning).frame(width: 5, height: 5).help("Contains changed files") }
             if let g = gitStatus { Text(TreeRow.gitLetter(g)).font(.system(size: 10.5, weight: .semibold, design: .monospaced)).foregroundStyle(TreeRow.gitColor(g)).help(g.status) }
         }
         .padding(.leading, CGFloat(depth) * 14 + 6).padding(.trailing, 6).frame(height: 26)

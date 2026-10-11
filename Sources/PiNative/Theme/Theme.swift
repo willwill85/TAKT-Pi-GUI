@@ -22,7 +22,10 @@ enum Theme {
     static let removed = dynamic(light: 0xCF222E, dark: 0xF85149)
     static let addedBackground = dynamic(light: 0x1A7F37, dark: 0x3FB950, lightAlpha: 0.12, darkAlpha: 0.16)
     static let removedBackground = dynamic(light: 0xCF222E, dark: 0xF85149, lightAlpha: 0.10, darkAlpha: 0.16)
-    static let warning = Color.orange
+    /// Brand accent: the logo's orange, used for text/icons/selection and the send button only.
+    static let accent = Color(red: 1.0, green: 0.42, blue: 0.24)
+    /// Softer amber for "awaiting input" / warnings, so it never reads as a second brand color.
+    static let warning = Color(red: 0.96, green: 0.70, blue: 0.22)
 
     static let columnWidth: CGFloat = 760
     static let radiusComposer: CGFloat = 20

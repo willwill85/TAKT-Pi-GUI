@@ -349,7 +349,7 @@ struct ThreadRow: View {
     @ViewBuilder private var statusView: some View {
         if running { SpinnerView() }
         else if awaiting { Circle().fill(Theme.warning).frame(width: 7, height: 7) }
-        else if unread { Circle().fill(Color.accentColor).frame(width: 7, height: 7) }
+        else if unread { Circle().fill(Theme.accent).frame(width: 7, height: 7) }
         else if session.relation?.kind == .subagent { Image(systemName: "arrow.turn.down.right").font(.system(size: 9)).foregroundStyle(.tertiary) }
         else if pinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.tertiary) }
         else { Color.clear }

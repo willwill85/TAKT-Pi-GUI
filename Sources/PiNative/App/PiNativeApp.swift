@@ -96,6 +96,7 @@ struct PiNativeApp: App {
             RootView()
                 .environment(model)
                 .environment(ui)
+                .tint(Theme.accent)
                 .preferredColorScheme(ui.colorScheme)
                 .frame(minWidth: 960, minHeight: 640)
                 .onAppear {
@@ -113,6 +114,7 @@ struct PiNativeApp: App {
             SettingsView()
                 .environment(model)
                 .environment(ui)
+                .tint(Theme.accent)
                 .preferredColorScheme(ui.colorScheme)
         }
     }
