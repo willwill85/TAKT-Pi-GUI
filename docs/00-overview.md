@@ -5,7 +5,7 @@
 ## 1. 目标 / 非目标
 
 **目标**
-1. 功能与 pi-web 当前版本（`/Users/will/pi_gui/pi-web-custom`，v0.11.0，pi SDK 1.1.0）等价：会话、聊天、工具卡片、模型、文件、Git、终端、子 Agent、设置（Models/Skills/Agents/Plugins/MCP/Cron/Tags…）。
+1. 功能与 pi-web 当前版本（[willwill85/pi-web](https://github.com/willwill85/pi-web)，基于上游 v0.11.1，pi SDK 1.1.0）等价：会话、聊天、工具卡片、模型、文件、Git、终端、子 Agent、设置（Models/Skills/Agents/Plugins/MCP/Cron/Tags…）。
 2. **原生**：SwiftUI + AppKit，无 WebView 渲染主界面（Markdown / 终端 / Diff / 文件预览全部原生控件）。
 3. **视觉与交互对标 Codex 桌面版**（见 [03-ui-spec-codex.md](03-ui-spec-codex.md)）。
 4. **兼容 pi remote**：手机端 Remote Pi、`/remote-pi` 命令、本地 agent mesh（`list_peers`/`agent_send`）、cron/daemon 都照常工作（见 [05-remote-pi.md](05-remote-pi.md)）。
@@ -39,7 +39,7 @@
 | 仅参考架构（不复制代码） | [851-labs/codevisor](https://github.com/851-labs/codevisor)（**AGPL-3.0**，已支持 Pi）、[sst/opencode](https://github.com/sst/opencode) 桌面端（sidecar + 随机密码 Basic 认证 + 同一套 HTTP/SSE 协议，与本方案 D2/D3 同构） | AGPL / MIT | AGPL 代码不引入。opencode 的 sidecar 生命周期（选端口、随机密码、健康检查、退出清理）可借鉴思路。 |
 | 后续可选 | [sparkle-project/Sparkle](https://github.com/sparkle-project/Sparkle) 自动更新 | MIT | P4。 |
 
-参考仓库已克隆到 `/Users/will/pi_gui/refs/`（kiln、perch、kaji、codexeption、codevisor、textual），**不进入本仓库构建**。
+参考仓库放在本仓库同级的 `refs/` 目录（kiln、perch、kaji、codexeption、codevisor、textual），**不进入本仓库构建**。
 
 ## 4. 目录结构
 

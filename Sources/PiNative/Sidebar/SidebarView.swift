@@ -146,7 +146,7 @@ struct SidebarView: View {
             Button("Rename…") { renameText = s.title; renaming = s }
             Button(model.ui.pinnedAt[s.id] != nil ? "Unpin" : "Pin") { Task { await model.setPinned(s.id, model.ui.pinnedAt[s.id] == nil) } }
             Button("Fork") { Task { await model.fork(s.id) } }
-            Button("Generate Title") { Task { await model.autoName(s.id) } }
+            Button(model.namingNow.contains(s.id) ? "Generating title…" : "Generate Title") { Task { await model.autoName(s.id) } }.disabled(model.namingNow.contains(s.id))
             if !model.tagState.tags.isEmpty {
                 Menu("Tags") {
                     ForEach(model.tagState.tags) { t in
@@ -369,21 +369,65 @@ struct SpinnerView: View {
 struct SidebarFooter: View {
     @Environment(AppModel.self) private var model
     @State private var remote = RemotePiStatus.shared
+    @State private var showUsage = false
+    @State private var showUpgrade = false
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             SettingsLink {
                 HStack(spacing: 8) { Image(systemName: "gearshape").font(.system(size: 13.5)); Text("Settings").font(.system(size: 13.5)) }
                     .padding(.horizontal, 10).frame(height: 30).contentShape(Rectangle())
             }.buttonStyle(.plain).foregroundStyle(.primary.opacity(0.8))
-            Spacer()
-            HStack(spacing: 5) {
-                Circle().fill(remote.online ? Color.green : Color.secondary.opacity(0.5)).frame(width: 7, height: 7)
-                Text("Remote Pi").font(.system(size: 11.5)).foregroundStyle(.tertiary)
-            }.help(remote.online ? "remote-pi supervisor is running" : "remote-pi supervisor is not running").padding(.trailing, 10)
+            Spacer(minLength: 0)
+            Button { showUsage.toggle() } label: {
+                Image(systemName: "chart.bar").font(.system(size: 12.5)).frame(width: 26, height: 26).contentShape(Rectangle())
+            }.buttonStyle(HoverButtonStyle()).foregroundStyle(.secondary).help("Balance & spend")
+                .popover(isPresented: $showUsage, arrowEdge: .top) { UsagePopover() }
+            statusPill
         }
         .padding(.horizontal, 8).padding(.vertical, 8)
         .overlay(alignment: .top) { Rectangle().fill(Theme.separator).frame(height: 1) }
         .task { remote.start() }
+    }
+
+    /// Where the Remote Pi indicator lives: an available pi upgrade takes its place until it is applied.
+    @ViewBuilder private var statusPill: some View {
+        if let u = model.piUpdate, u.available || model.piUpgrading {
+            Button { showUpgrade.toggle() } label: {
+                HStack(spacing: 5) {
+                    if model.piUpgrading { SpinnerView(size: 9) } else { Image(systemName: "arrow.up.circle.fill").font(.system(size: 11)) }
+                    Text(model.piUpgrading ? "Upgrading…" : "Pi \(u.latest)").font(.system(size: 11.5, weight: .medium))
+                }
+                .foregroundStyle(Theme.accent).padding(.horizontal, 8).frame(height: 24)
+                .background(Capsule().fill(Theme.accent.opacity(0.14)))
+            }.buttonStyle(.plain).help("pi \(u.latest) is available (you have \(u.current))")
+                .popover(isPresented: $showUpgrade, arrowEdge: .top) { PiUpgradePopover() }
+                .padding(.trailing, 4)
+        } else {
+            HStack(spacing: 5) {
+                Circle().fill(remote.online ? Color.green : Color.secondary.opacity(0.5)).frame(width: 7, height: 7)
+                Text("Remote Pi").font(.system(size: 11.5)).foregroundStyle(.tertiary)
+            }.help(remote.online ? "remote-pi supervisor is running" : "remote-pi supervisor is not running").padding(.horizontal, 8)
+        }
+    }
+}
+
+struct PiUpgradePopover: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        let u = model.piUpdate
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Pi update available").font(.system(size: 13.5, weight: .semibold))
+            Text("v\(u?.current ?? "?") → v\(u?.latest ?? "?")").font(.system(size: 12.5, design: .monospaced)).foregroundStyle(.secondary)
+            Text("Runs `pi update self`. Threads that are already running keep the old version until restarted.")
+                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let m = model.piUpdateMessage { Text(m).font(.system(size: 12)).foregroundStyle(.secondary) }
+            HStack {
+                Button("Check Now") { Task { await model.checkPiUpdate(force: true) } }.controlSize(.small).disabled(model.piChecking || model.piUpgrading)
+                Spacer()
+                Button(model.piUpgrading ? "Upgrading…" : "Upgrade") { Task { await model.upgradePi() } }
+                    .buttonStyle(.borderedProminent).controlSize(.small).disabled(model.piUpgrading)
+            }
+        }.padding(14).frame(width: 300)
     }
 }
 

@@ -20,7 +20,7 @@ final class UIState {
     weak var model: AppModel?
     var lightbox: LightboxItem?
     var mentionRequest: String?
-    var filePlacement: FilePlacement = FilePlacement(rawValue: UserDefaults.standard.string(forKey: "filePlacement") ?? "") ?? .panel {
+    var filePlacement: FilePlacement = FilePlacement(rawValue: UserDefaults.standard.string(forKey: "filePlacement") ?? "") ?? .sidebar {
         didSet { UserDefaults.standard.set(filePlacement.rawValue, forKey: "filePlacement"); if filePlacement == .sidebar, model?.workspace.tab == .files { model?.workspace.tab = .review } }
     }
     var filesSectionHeight: CGFloat = {

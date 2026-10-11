@@ -37,12 +37,16 @@ public final class AppModel {
     public var newThreadModel: ModelRef?
     public var newThreadThinking: String?
     public var toast: String?
+    public private(set) var namingNow: Set<String> = []
     public var unread: Set<String> = []
     public var homeDirectory = NSHomeDirectory()
     public let workspace = WorkspaceModel()
     public private(set) var tagState = TagState()
     public private(set) var appUpdate: (current: String, latest: String, available: Bool)?
     public private(set) var piVersion: String?
+    public private(set) var accountUsage = AccountUsage()
+    public private(set) var accountUsageLoading = false
+    public private(set) var priceTiers = PriceTiers()
     public private(set) var piUpdate: (current: String, latest: String, available: Bool)?
     public private(set) var piChecking = false
     public private(set) var piUpgrading = false
@@ -95,6 +99,7 @@ public final class AppModel {
         sessionsLoaded = true
         Task { await checkUpdate() }
         startPiUpdateChecks()
+        Task { await refreshAccountUsage() }
         if newThreadCwd == nil { newThreadCwd = sessions.first?.cwd ?? homeDirectory }
         syncWorkspace()
         await loadModels(cwd: newThreadCwd)
@@ -216,6 +221,24 @@ public final class AppModel {
         }
     }
 
+    // MARK: Usage & prices
+
+    /// Balances and 24h / 30d spend, exactly as each provider reports them.
+    public func refreshAccountUsage(force: Bool = false) async {
+        guard let client else { return }
+        accountUsageLoading = true; defer { accountUsageLoading = false }
+        if let d = try? await client.get("/api/account-usage", query: force ? ["force": "1"] : [:]) { accountUsage = AccountUsage(json: d) }
+    }
+
+    public func refreshPrices() async {
+        guard let client, let d = try? await client.get("/api/model-prices") else { return }
+        var prices: [String: ModelPrice] = [:]
+        for (k, v) in d["prices"]?.object ?? [:] {
+            if let i = v["input"]?.double, let o = v["output"]?.double { prices[k] = ModelPrice(input: i, output: o) }
+        }
+        priceTiers = PriceTiers(prices: prices, among: catalog.models.map(\.id))
+    }
+
     // MARK: Models
 
     public func loadModels(cwd: String?) async {
@@ -235,6 +258,8 @@ public final class AppModel {
         if let dm = d["defaultModel"], let p = dm["provider"]?.string, let id = dm["modelId"]?.string { c.defaultModel = ModelRef(provider: p, modelId: id) }
         c.defaultThinking = d["defaultThinkingLevel"]?.string
         catalog = c
+        priceTiers = PriceTiers(prices: priceTiers.prices, among: c.models.map(\.id))
+        Task { await refreshPrices() }
         if newThreadModel == nil { newThreadModel = c.defaultModel }
         if newThreadThinking == nil { newThreadThinking = c.defaultThinking ?? c.levels(for: c.defaultModel).first }
     }
@@ -409,9 +434,17 @@ public final class AppModel {
         } catch { toast = error.localizedDescription }
     }
 
+    /// Asks the model for a short title (same call the web app uses) and reports the outcome.
     public func autoName(_ id: String) async {
-        guard let client else { return }
-        _ = try? await client.post("/api/sessions/\(id)/auto-name")
-        await refreshSessions()
+        guard let client, !namingNow.contains(id) else { return }
+        namingNow.insert(id); defer { namingNow.remove(id) }
+        toast = "Generating title…"
+        do {
+            let r = try await client.post("/api/sessions/\(id)/auto-name")
+            await refreshSessions()
+            toast = r["title"]?.string.map { "Titled: \($0)" } ?? "Title updated"
+        } catch {
+            toast = "Could not generate a title: \(error.localizedDescription)"
+        }
     }
 }

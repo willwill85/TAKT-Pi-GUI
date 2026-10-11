@@ -38,5 +38,12 @@
 | Mermaid/docx 预览无原生方案 | P2/P3 再定：源码块降级；docx 用 `NSAttributedString(docFormat)`/QuickLook |
 | Codex 视觉只能凭记忆 | 落地后实机截图校准，记录于 03 文档 |
 
+## 当前状态（0.1.x）
+
+- **已完成**：P0、P1、P2 的主体，以及 P3 的大部分设置页；另外新增了 Usage（余额与花费）、模型价格、pi 升级、标签库。逐项状态见 [02 功能对照](02-feature-parity.md)。
+- **未实现**：滚动小地图、工具预设、语音输入、扩展 `custom` 终端 UI、codemode 专用卡片。
+- **P4 未开始**：内置 Node 与 standalone sidecar（目前需要本机已装 Node 22 并自行构建服务端）、Sparkle 自动更新、签名与公证、本地化。
+- **验证缺口**：与 Codex 桌面版的视觉对照没有基准截图（本机没有 Codex.app），样式按公开描述与参考项目调校。
+
 ## 进度日志
 见 [CHANGELOG.md](../CHANGELOG.md)。

@@ -27,6 +27,12 @@ enum Theme {
     /// Softer amber for "awaiting input" / warnings, so it never reads as a second brand color.
     static let warning = Color(red: 0.96, green: 0.70, blue: 0.22)
 
+    /// Price tiers 0…3 (cheapest → most expensive quarter of the selectable models).
+    static func priceColor(_ tier: Int) -> Color {
+        [Color(red: 0.25, green: 0.78, blue: 0.45), Color(red: 0.62, green: 0.80, blue: 0.28),
+         Color(red: 0.96, green: 0.70, blue: 0.22), Color(red: 0.93, green: 0.36, blue: 0.33)][max(0, min(3, tier))]
+    }
+
     static let columnWidth: CGFloat = 760
     static let radiusComposer: CGFloat = 20
     static let radiusCard: CGFloat = 12

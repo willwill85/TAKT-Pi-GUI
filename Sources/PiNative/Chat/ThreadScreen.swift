@@ -114,7 +114,7 @@ struct ThreadHeader: View {
             Menu {
                 Button("Rename…") { nameDraft = title; renaming = true }
                 Button("Fork") { Task { await model.fork(store.sessionId) } }
-                Button("Generate Title") { Task { await model.autoName(store.sessionId) } }
+                Button(model.namingNow.contains(store.sessionId) ? "Generating title…" : "Generate Title") { Task { await model.autoName(store.sessionId) } }.disabled(model.namingNow.contains(store.sessionId))
                 Divider()
                 Button("Conversation Tree…") { ui.activeSheet = .sessionTree(store.sessionId) }
                 Button("System Prompt & Tools…") { ui.activeSheet = .systemPrompt(store.sessionId) }

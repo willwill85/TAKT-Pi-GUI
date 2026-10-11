@@ -147,7 +147,16 @@ struct ComposerView: View {
                 Section(p) {
                     ForEach(groups[p] ?? []) { m in
                         Button { selectModel(ModelRef(provider: m.provider, modelId: m.modelId)) } label: {
-                            if m.provider == currentModel?.provider && m.modelId == currentModel?.modelId { Label(m.name, systemImage: "checkmark") } else { Text(m.name) }
+                            let selected = m.provider == currentModel?.provider && m.modelId == currentModel?.modelId
+                            let tier = model.priceTiers.tier(m.id)
+                            // Menu items render as native menu rows, so the price tier is shown with a colored glyph.
+                            Label {
+                                Text(m.name + (model.priceTiers.price(m.id).map { "  ·  " + priceText($0) } ?? ""))
+                            } icon: {
+                                if selected { Image(systemName: "checkmark") }
+                                else if let tier { Image(systemName: "circle.fill").foregroundStyle(Theme.priceColor(tier)) }
+                                else { Image(systemName: "circle").foregroundStyle(.tertiary) }
+                            }
                         }
                     }
                 }

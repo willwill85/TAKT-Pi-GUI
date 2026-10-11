@@ -2,11 +2,11 @@ import SwiftUI
 import PiKit
 
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case general = "General", tags = "Tags", models = "Models", skills = "Skills", agents = "Agents", plugins = "Plugins", mcp = "MCP", tools = "Tools", connection = "Connection", about = "About"
+    case general = "General", tags = "Tags", usage = "Usage", models = "Models", skills = "Skills", agents = "Agents", plugins = "Plugins", mcp = "MCP", tools = "Tools", connection = "Connection", about = "About"
     var id: String { rawValue }
     var icon: String {
         switch self {
-        case .general: return "gearshape"; case .tags: return "tag"; case .models: return "cpu"; case .skills: return "sparkles"; case .agents: return "person.2"
+        case .general: return "gearshape"; case .tags: return "tag"; case .usage: return "chart.bar"; case .models: return "cpu"; case .skills: return "sparkles"; case .agents: return "person.2"
         case .plugins: return "puzzlepiece"; case .mcp: return "server.rack"; case .tools: return "wrench.and.screwdriver"; case .connection: return "network"; case .about: return "info.circle"
         }
     }
@@ -28,6 +28,7 @@ struct SettingsView: View {
                     switch page {
                     case .general: GeneralSettings()
                     case .tags: TagsSettings()
+                    case .usage: UsageSettings()
                     case .models: ModelsSettings()
                     case .skills: SkillsSettings()
                     case .agents: AgentsSettings()
