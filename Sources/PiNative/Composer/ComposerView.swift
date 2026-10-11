@@ -8,6 +8,8 @@ struct CompletionItem: Identifiable, Hashable {
     var detail: String
     var insert: String
     var icon: String
+    /// Set for a file mention, so the row shows the file-type icon instead of a generic one.
+    var path: String? = nil
 }
 
 struct ComposerView: View {
@@ -22,6 +24,8 @@ struct ComposerView: View {
     @State private var height: CGFloat = 24
     @State private var attachments: [ImageAttachment] = []
     @State private var selectedCompletion = 0
+    /// Set when Escape closes the panel; cleared as soon as the text changes.
+    @State private var completionDismissed = false
     @State private var fileIndex: [String] = []
     @State private var fileIndexCwd: String?
     @State private var sending = false
@@ -37,7 +41,11 @@ struct ComposerView: View {
     // MARK: Completions
     private static let builtins: [CompletionItem] = [
         .init(id: "b-compact", title: "/compact", detail: "Summarise the conversation to free context", insert: "/compact", icon: "arrow.down.right.and.arrow.up.left"),
+        .init(id: "b-auto", title: "/auto-compact", detail: "Toggle automatic compaction", insert: "/auto-compact", icon: "arrow.triangle.2.circlepath"),
+        .init(id: "b-reload", title: "/reload", detail: "Reload skills, extensions and commands", insert: "/reload", icon: "arrow.clockwise"),
         .init(id: "b-name", title: "/name", detail: "Rename this thread", insert: "/name ", icon: "pencil"),
+        .init(id: "b-session", title: "/session", detail: "Show this thread's id and path", insert: "/session", icon: "info.circle"),
+        .init(id: "b-mcp", title: "/mcp", detail: "Show the MCP servers this thread sees", insert: "/mcp", icon: "server.rack"),
         .init(id: "b-copy", title: "/copy", detail: "Copy the last assistant message", insert: "/copy", icon: "doc.on.doc"),
         .init(id: "b-clone", title: "/clone", detail: "Fork this thread", insert: "/clone", icon: "arrow.triangle.branch"),
     ]
@@ -46,7 +54,8 @@ struct ComposerView: View {
         let upto = String(text.prefix(caret))
         if upto.hasPrefix("/"), !upto.contains(" "), !upto.contains("\n") {
             let q = String(upto.dropFirst()).lowercased()
-            let ext = (store?.commands ?? []).map { CompletionItem(id: "c-" + $0.id, title: "/" + $0.name, detail: $0.description, insert: "/" + $0.name + " ", icon: iconFor($0.source)) }
+            let known = (store?.commands.isEmpty == false ? store?.commands : nil) ?? model.slashCommands
+            let ext = known.map { CompletionItem(id: "c-" + $0.id, title: "/" + $0.name, detail: $0.description, insert: "/" + $0.name + " ", icon: iconFor($0.source)) }
             let all = Self.builtins + ext
             return Array(all.filter { q.isEmpty || $0.title.lowercased().dropFirst().contains(q) }.prefix(12))
         }
@@ -57,7 +66,7 @@ struct ComposerView: View {
                 let q = String(token).lowercased()
                 let matches = fileIndex.filter { q.isEmpty || $0.lowercased().contains(q) }
                     .sorted { rank($0, q) < rank($1, q) }.prefix(10)
-                return matches.map { CompletionItem(id: "f-" + $0, title: ($0 as NSString).lastPathComponent, detail: ($0 as NSString).deletingLastPathComponent, insert: "@" + $0 + " ", icon: "doc") }
+                return matches.map { CompletionItem(id: "f-" + $0, title: ($0 as NSString).lastPathComponent, detail: ($0 as NSString).deletingLastPathComponent, insert: "@" + $0 + " ", icon: "", path: $0) }
             }
         }
         return []
@@ -77,7 +86,7 @@ struct ComposerView: View {
             if let store, !store.queued.isEmpty { QueueStrip(store: store) }
             ZStack(alignment: .bottom) {
                 card
-                if !completions.isEmpty {
+                if !completions.isEmpty && !completionDismissed {
                     CompletionList(items: completions, selected: min(selectedCompletion, completions.count - 1)) { accept($0) }
                         .offset(y: -(cardHeight + 8)).frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -86,7 +95,7 @@ struct ComposerView: View {
             contextRow
         }
         .task { text = DraftStore.shared.get(draftKey); caret = text.count; await loadFileIndex() }
-        .onChange(of: text) { _, new in DraftStore.shared.set(draftKey, new) }
+        .onChange(of: text) { _, new in DraftStore.shared.set(draftKey, new); completionDismissed = false }
         .onChange(of: cwd) { _, _ in Task { await loadFileIndex() } }
         .onChange(of: ui.mentionRequest) { _, v in
             guard let v else { return }
@@ -141,32 +150,15 @@ struct ComposerView: View {
     }
 
     private var modelMenu: some View {
-        Menu {
-            let groups = Dictionary(grouping: model.catalog.models, by: \.provider)
-            ForEach(groups.keys.sorted(), id: \.self) { p in
-                Section(p) {
-                    ForEach(groups[p] ?? []) { m in
-                        Button { selectModel(ModelRef(provider: m.provider, modelId: m.modelId)) } label: {
-                            let selected = m.provider == currentModel?.provider && m.modelId == currentModel?.modelId
-                            let tier = model.priceTiers.tier(m.id)
-                            // Menu items render as native menu rows, so the price tier is shown with a colored glyph.
-                            Label {
-                                Text(m.name + (model.priceTiers.price(m.id).map { "  ·  " + priceText($0) } ?? ""))
-                            } icon: {
-                                if selected { Image(systemName: "checkmark") }
-                                else if let tier { Image(systemName: "circle.fill").foregroundStyle(Theme.priceColor(tier)) }
-                                else { Image(systemName: "circle").foregroundStyle(.tertiary) }
-                            }
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 3) {
-                Text(modelLabel).lineLimit(1)
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
-            }.font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary).padding(.horizontal, 6).frame(height: 26)
-        }.menuStyle(.borderlessButton).tint(.secondary).menuIndicator(.hidden).fixedSize().help("Model")
+        ModelPickerButton(
+            models: model.catalog.models,
+            current: currentModel,
+            defaultModel: model.catalog.defaultModel,
+            price: { model.priceTiers.price($0) },
+            tier: { model.priceTiers.tier($0) },
+            label: modelLabel,
+            onPick: { selectModel($0) },
+            onSetDefault: { setDefaultModel($0) })
     }
 
     private var modelLabel: String {
@@ -228,7 +220,7 @@ struct ComposerView: View {
             case .down: selectedCompletion = (selectedCompletion + 1) % items.count; return true
             case .up: selectedCompletion = (selectedCompletion - 1 + items.count) % items.count; return true
             case .tab, .enter: accept(items[min(selectedCompletion, items.count - 1)]); return true
-            case .escape: text += " "; return true
+            case .escape: completionDismissed = true; return true
             }
         }
         if k == .up, text.isEmpty || historyIndex != nil {
@@ -255,6 +247,56 @@ struct ComposerView: View {
         caret = (head + item.insert).count
     }
 
+    /// Handles a built-in slash command. Returns false when the text should be sent to the model instead.
+    private func runSlash(_ cmd: String, args: String, store: SessionStore) async -> Bool {
+        switch cmd {
+        case "compact":
+            await store.compact(); model.toast = "Compacting…"
+        case "auto-compact":
+            do {
+                let st = try await model.client?.command(store.sessionId, ["type": "get_state"])
+                let next = !(st?["autoCompactionEnabled"]?.bool ?? true)
+                try await model.client?.command(store.sessionId, ["type": "set_auto_compaction", "enabled": next])
+                model.toast = next ? "Auto-compaction on" : "Auto-compaction off"
+            } catch { model.toast = error.localizedDescription }
+        case "reload":
+            do {
+                try await model.client?.command(store.sessionId, ["type": "reload"])
+                await store.loadCommands(); await store.refreshState()
+                model.toast = "Reloaded"
+            } catch { model.toast = error.localizedDescription }
+        case "name":
+            guard !args.isEmpty else { model.toast = "Usage: /name <name>"; return true }
+            await model.rename(store.sessionId, to: args)
+        case "session":
+            let path = store.info?.path ?? ""
+            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(store.sessionId, forType: .string)
+            model.toast = path.isEmpty ? "Copied session id" : "Copied id · \(path)"
+        case "mcp":
+            let servers = store.statuses.filter { $0.key.lowercased().contains("mcp") }
+            model.toast = servers.isEmpty ? "No MCP status reported" : servers.map(\.text).joined(separator: " · ")
+        case "copy":
+            if let t = store.messages.last(where: { $0.role == .assistant })?.text, !t.isEmpty {
+                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(t, forType: .string); model.toast = "Copied"
+            } else { model.toast = "Nothing to copy yet" }
+        case "clone":
+            await model.fork(store.sessionId)
+        default:
+            return false
+        }
+        return true
+    }
+
+    private func setDefaultModel(_ m: ModelRef) {
+        guard let client = model.client else { return }
+        Task {
+            var body: [String: Any] = ["provider": m.provider, "modelId": m.modelId]
+            if let cwd { body["cwd"] = cwd }
+            do { _ = try await client.send("PUT", "/api/models/default", body: body); model.toast = "Default model saved"; await model.loadModels(cwd: cwd) }
+            catch { model.toast = error.localizedDescription }
+        }
+    }
+
     private func selectModel(_ m: ModelRef) {
         if let store { Task { await store.setModel(m) } } else {
             model.newThreadModel = m
@@ -269,14 +311,11 @@ struct ComposerView: View {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty, !sending else { return }
         // Built-in slash commands
-        if let store, attachments.isEmpty {
-            if trimmed == "/compact" { text = ""; await store.compact(); return }
-            if trimmed == "/clone" { text = ""; await model.fork(store.sessionId); return }
-            if trimmed == "/copy" {
-                if let t = store.messages.last(where: { $0.role == .assistant })?.text { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(t, forType: .string); model.toast = "Copied" }
-                text = ""; return
-            }
-            if trimmed.hasPrefix("/name ") { let n = String(trimmed.dropFirst(6)); text = ""; await model.rename(store.sessionId, to: n); return }
+        if let store, attachments.isEmpty, trimmed.hasPrefix("/") {
+            let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true).map(String.init)
+            let cmd = String(parts[0].dropFirst())
+            let args = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+            if await runSlash(cmd, args: args, store: store) { text = ""; return }
         }
         sending = true; defer { sending = false }
         let imgs = attachments
@@ -353,7 +392,7 @@ struct CompletionList: View {
                 VStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { i, it in
                         HStack(spacing: 10) {
-                            Image(systemName: it.icon).font(.system(size: 12)).foregroundStyle(.secondary).frame(width: 18)
+                            Group { if let path = it.path { FileIcon(path: path) } else { Image(systemName: it.icon).font(.system(size: 12)).foregroundStyle(.secondary) } }.frame(width: 18)
                             Text(it.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
                             Text(it.detail).font(.system(size: 12)).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.head)
                             Spacer(minLength: 0)
@@ -404,5 +443,86 @@ struct QueueStrip: View {
                 }
             }
         }.padding(.horizontal, 14).padding(.vertical, 8).cardSurface().hairline()
+    }
+}
+
+/// The model selector: a searchable list grouped by provider, with the price tier and a star for the
+/// default. A native menu cannot hold a search field, so this is its own panel.
+struct ModelPickerButton: View {
+    let models: [ModelInfo]
+    let current: ModelRef?
+    let defaultModel: ModelRef?
+    let price: (String) -> ModelPrice?
+    let tier: (String) -> Int?
+    let label: String
+    let onPick: (ModelRef) -> Void
+    let onSetDefault: (ModelRef) -> Void
+
+    @State private var open = false
+    @State private var query = ""
+
+    private var filtered: [ModelInfo] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return models }
+        return models.filter { $0.name.lowercased().contains(q) || $0.modelId.lowercased().contains(q) || $0.provider.lowercased().contains(q) }
+    }
+
+    var body: some View {
+        Button { open.toggle() } label: {
+            HStack(spacing: 3) {
+                Text(label).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+            }.font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary).padding(.horizontal, 6).frame(height: 26)
+        }
+        .buttonStyle(.plain).help("Model")
+        .popover(isPresented: $open, arrowEdge: .top) { panel }
+    }
+
+    private var panel: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.tertiary)
+                TextField("Search models", text: $query).textFieldStyle(.plain).font(.system(size: 13))
+                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }.buttonStyle(.plain) }
+            }.padding(.horizontal, 10).frame(height: 34)
+            Divider().opacity(0.6)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    let groups = Dictionary(grouping: filtered, by: \.provider)
+                    ForEach(groups.keys.sorted(), id: \.self) { p in
+                        Text(p).font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary)
+                            .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 2)
+                        ForEach(groups[p] ?? []) { m in row(m) }
+                    }
+                    if filtered.isEmpty { Text("No matching models").font(.system(size: 12.5)).foregroundStyle(.tertiary).padding(16) }
+                }.padding(.bottom, 6)
+            }.frame(maxHeight: 360)
+        }
+        .frame(width: 360)
+        .onExitCommand { open = false }
+    }
+
+    private func row(_ m: ModelInfo) -> some View {
+        let ref = ModelRef(provider: m.provider, modelId: m.modelId)
+        let selected = ref == current
+        let isDefault = ref == defaultModel
+        return HStack(spacing: 8) {
+            Group {
+                if selected { Image(systemName: "checkmark") }
+                else if let t = tier(m.id) { Image(systemName: "circle.fill").foregroundStyle(Theme.priceColor(t)) }
+                else { Image(systemName: "circle").foregroundStyle(.quaternary) }
+            }.font(.system(size: 10)).frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(m.name).font(.system(size: 13)).lineLimit(1)
+                if let p = price(m.id) { Text(priceText(p)).font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1) }
+            }
+            Spacer(minLength: 4)
+            Button { onSetDefault(ref) } label: {
+                Image(systemName: isDefault ? "star.fill" : "star").font(.system(size: 11)).foregroundStyle(isDefault ? Theme.warning : Color.secondary.opacity(0.5))
+            }.buttonStyle(.plain).help(isDefault ? "Default for new threads" : "Make default for new threads")
+        }
+        .padding(.horizontal, 10).frame(height: 34).contentShape(Rectangle())
+        .background(selected ? Color.primary.opacity(0.06) : .clear)
+        .onTapGesture { onPick(ref); open = false; query = "" }
     }
 }

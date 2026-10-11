@@ -175,6 +175,9 @@ public struct SessionInfo: Identifiable, Hashable, Sendable {
     public var parentSessionId: String?
     public var relation: SessionRelation?
     public var transient: Bool
+    /// True for a summary row: the server returned header metadata only, so the name and the first
+    /// message are not known yet. Such a row must not be titled "New thread" as if it were empty.
+    public var detailsPending: Bool
 
     public var title: String {
         if let n = name, !n.isEmpty { return n }
@@ -196,6 +199,7 @@ public struct SessionInfo: Identifiable, Hashable, Sendable {
         projectKey = j["projectKey"]?.string ?? projectRoot
         parentSessionId = j["parentSessionId"]?.string
         transient = j["transient"]?.bool ?? false
+        detailsPending = j["detailsPending"]?.bool ?? false
         if let r = j["relation"], let kind = r["kind"]?.string.flatMap(SessionRelation.Kind.init(rawValue:)) {
             relation = SessionRelation(
                 kind: kind,

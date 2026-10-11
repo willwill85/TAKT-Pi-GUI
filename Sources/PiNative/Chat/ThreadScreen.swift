@@ -184,7 +184,9 @@ struct MessageList: View {
             .onChange(of: items.count) { _, _ in if atBottom { position.scrollTo(edge: .bottom) } }
             .onChange(of: store.streaming) { _, _ in if atBottom { position.scrollTo(edge: .bottom) } }
             .onChange(of: store.liveToolResults.count) { _, _ in if atBottom { position.scrollTo(edge: .bottom) } }
-            .onChange(of: store.sessionId) { _, _ in position.scrollTo(edge: .bottom) }
+            .onChange(of: store.sessionId) { _, _ in followBottom() }
+            .onChange(of: store.messages.count) { _, _ in followBottom() }
+            .onChange(of: store.isLoading) { _, _ in followBottom() }
 
             if !atBottom {
                 Button { withAnimation { position.scrollTo(edge: .bottom) } } label: {
@@ -194,7 +196,14 @@ struct MessageList: View {
             }
             if store.isLoading && store.messages.isEmpty { ProgressView().controlSize(.small).frame(maxHeight: .infinity) }
         }
-        .onAppear { position.scrollTo(edge: .bottom) }
+        .onAppear { followBottom() }
+    }
+
+    /// Opening a thread should land on the newest message. The first scroll happens while the list is
+    /// still empty, so it is repeated once the messages actually arrive.
+    private func followBottom() {
+        atBottom = true
+        position.scrollTo(edge: .bottom)
     }
 
     private func showWaiting(_ items: [ThreadItem]) -> Bool {

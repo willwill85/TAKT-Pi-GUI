@@ -26,6 +26,9 @@ public final class AppModel {
     public let sidecar = SidecarManager()
     public private(set) var client: APIClient?
     public private(set) var sessions: [SessionInfo] = []
+    /// Slash commands available before any thread exists (skills, prompts, extensions). A live thread's own
+    /// list, which also includes its session commands, takes over once one is open.
+    public private(set) var slashCommands: [SlashCommand] = []
     public private(set) var ui = SessionUiState()
     public private(set) var running: Set<String> = []
     public private(set) var awaiting: Set<String> = []
@@ -118,16 +121,27 @@ public final class AppModel {
 
     public func refreshSessions() async {
         guard let client else { return }
+        // Header metadata first, so the sidebar paints immediately; it carries no names.
         async let list = try? client.get("/api/sessions", query: ["summary": "1"])
         async let uiJ = try? client.get("/api/sessions/ui-state")
         let (l, u) = await (list, uiJ)
-        if let l {
-            sessions = (l["sessions"]?.array ?? []).compactMap(SessionInfo.init(json:)).filter { !$0.transient || running.contains($0.id) }
-            running = Set((l["runningSessionIds"]?.array ?? []).compactMap(\.string))
-            awaiting = Set((l["awaitingInputSessionIds"]?.array ?? []).compactMap(\.string))
-        }
+        applySessionList(l)
         if let u, let st = u["state"] { ui = SessionUiState(json: st) }
         rebuildSidebar()
+        // The full listing fills in names and first messages. Without it every unnamed session
+        // stays "New thread" forever.
+        if sessions.contains(where: \.detailsPending) {
+            let full = try? await client.get("/api/sessions")
+            applySessionList(full)
+            rebuildSidebar()
+        }
+    }
+
+    private func applySessionList(_ l: JSON?) {
+        guard let l else { return }
+        sessions = (l["sessions"]?.array ?? []).compactMap(SessionInfo.init(json:)).filter { !$0.transient || running.contains($0.id) }
+        running = Set((l["runningSessionIds"]?.array ?? []).compactMap(\.string))
+        awaiting = Set((l["awaitingInputSessionIds"]?.array ?? []).compactMap(\.string))
     }
 
     func rebuildSidebar() { sidebar = SidebarModel.build(sessions: sessions, ui: ui, running: running) }
@@ -306,6 +320,7 @@ public final class AppModel {
             s.connect()
             await s.refreshState()
             await s.loadCommands()
+            if !s.commands.isEmpty { slashCommands = s.commands }
         }
     }
 
@@ -346,6 +361,7 @@ public final class AppModel {
             s.connect()
             await s.refreshState()
             await s.loadCommands()
+            if !s.commands.isEmpty { slashCommands = s.commands }
             let ok = await s.send(text, images: images)
             await refreshSessions()
             return ok ? sid : sid
