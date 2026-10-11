@@ -43,6 +43,11 @@ public final class AppModel {
     public private(set) var tagState = TagState()
     public private(set) var appUpdate: (current: String, latest: String, available: Bool)?
     public private(set) var piVersion: String?
+    public private(set) var piUpdate: (current: String, latest: String, available: Bool)?
+    public private(set) var piChecking = false
+    public private(set) var piUpgrading = false
+    public var piUpdateMessage: String?
+    private var piUpdateTask: Task<Void, Never>?
 
     /// Fired when any session finishes a run: (store, aborted).
     public var onRunFinished: ((SessionStore, Bool) -> Void)?
@@ -89,6 +94,7 @@ public final class AppModel {
         await refreshTags()
         sessionsLoaded = true
         Task { await checkUpdate() }
+        startPiUpdateChecks()
         if newThreadCwd == nil { newThreadCwd = sessions.first?.cwd ?? homeDirectory }
         syncWorkspace()
         await loadModels(cwd: newThreadCwd)
@@ -169,6 +175,45 @@ public final class AppModel {
     public func checkUpdate() async {
         guard let client, let d = try? await client.get("/api/app-update") else { return }
         appUpdate = (d["currentVersion"]?.string ?? "", d["latestVersion"]?.string ?? "", d["updateAvailable"]?.bool ?? false)
+    }
+
+    /// Checks pi's own version now and every 6 hours while the app runs.
+    public func startPiUpdateChecks() {
+        piUpdateTask?.cancel()
+        piUpdateTask = Task { [weak self] in
+            while let self, !Task.isCancelled {
+                await self.checkPiUpdate(force: false)
+                try? await Task.sleep(for: .seconds(6 * 3600))
+            }
+        }
+    }
+
+    public func checkPiUpdate(force: Bool) async {
+        guard let client else { return }
+        piChecking = true; defer { piChecking = false }
+        do {
+            let d = try await client.get("/api/pi-update", query: force ? ["force": "1"] : [:])
+            let cur = d["currentVersion"]?.string ?? ""
+            piUpdate = (cur, d["latestVersion"]?.string ?? "", d["updateAvailable"]?.bool ?? false)
+            if !cur.isEmpty { piVersion = cur }
+            if force { piUpdateMessage = (piUpdate?.available == true) ? nil : "Pi is up to date." }
+        } catch {
+            if force { piUpdateMessage = "Update check failed: \(error.localizedDescription)" }
+        }
+    }
+
+    public func upgradePi() async {
+        guard let client, !piUpgrading else { return }
+        piUpgrading = true; piUpdateMessage = nil; defer { piUpgrading = false }
+        do {
+            let d = try await client.post("/api/pi-update")
+            let v = d["installedVersion"]?.string ?? ""
+            piUpdateMessage = "Upgraded to \(v). Restart the app so new threads use it."
+            await checkPiUpdate(force: true)
+            piUpdateMessage = "Upgraded to \(v). Restart the app so new threads use it."
+        } catch {
+            piUpdateMessage = "Upgrade failed: \(error.localizedDescription)"
+        }
     }
 
     // MARK: Models

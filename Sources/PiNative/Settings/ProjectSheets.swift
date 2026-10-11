@@ -4,8 +4,19 @@ import PiKit
 // MARK: - Tags manager (global: create / rename / recolor / delete)
 
 struct TagsManagerSheet: View {
-    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack { Text("Tags").font(.system(size: 17, weight: .semibold)); Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+            TagsManagerContent()
+        }
+        .padding(22).frame(width: 520)
+    }
+}
+
+/// Create / rename / recolor / delete global tags. Shared by the Settings › Tags page and the sidebar sheet.
+struct TagsManagerContent: View {
+    @Environment(AppModel.self) private var model
     @State private var name = ""
     @State private var color = Color(hex: "#7c8cff")
     @State private var error: String?
@@ -14,7 +25,6 @@ struct TagsManagerSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack { Text("Tags").font(.system(size: 17, weight: .semibold)); Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
             Text("Colored labels to organise projects and threads in the sidebar. Assign them from a project or thread menu.").font(.system(size: 12.5)).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 TextField("New tag name", text: $name).textFieldStyle(.roundedBorder).onSubmit(add)
@@ -38,9 +48,8 @@ struct TagsManagerSheet: View {
                     }
                     if model.tagState.tags.isEmpty { Text("No tags yet").foregroundStyle(.secondary).padding(30) }
                 }
-            }.frame(height: 260)
+            }.frame(minHeight: 200, maxHeight: 320)
         }
-        .padding(22).frame(width: 520)
         .alert("Rename tag", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
             TextField("Name", text: $editName)
             Button("Save") { if let t = editing { let n = editName; Task { error = await model.tagAction(["action": "update", "id": t.id, "name": n]) } }; editing = nil }

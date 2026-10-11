@@ -49,6 +49,10 @@ struct NewThreadScreen: View {
             }
             Text("·")
             Text("pi v\(model.piVersion ?? piVersionGuess)")
+            if let u = model.piUpdate, u.available {
+                Text("→ v\(u.latest) Upgrade").foregroundStyle(Theme.accent)
+                    .onTapGesture { NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) }
+            }
         }.font(.system(size: 11.5)).foregroundStyle(.tertiary)
     }
     private var piVersionGuess: String { "1.1" }

@@ -2,11 +2,11 @@ import SwiftUI
 import PiKit
 
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case general = "General", models = "Models", skills = "Skills", agents = "Agents", plugins = "Plugins", mcp = "MCP", tools = "Tools", connection = "Connection", about = "About"
+    case general = "General", tags = "Tags", models = "Models", skills = "Skills", agents = "Agents", plugins = "Plugins", mcp = "MCP", tools = "Tools", connection = "Connection", about = "About"
     var id: String { rawValue }
     var icon: String {
         switch self {
-        case .general: return "gearshape"; case .models: return "cpu"; case .skills: return "sparkles"; case .agents: return "person.2"
+        case .general: return "gearshape"; case .tags: return "tag"; case .models: return "cpu"; case .skills: return "sparkles"; case .agents: return "person.2"
         case .plugins: return "puzzlepiece"; case .mcp: return "server.rack"; case .tools: return "wrench.and.screwdriver"; case .connection: return "network"; case .about: return "info.circle"
         }
     }
@@ -27,6 +27,7 @@ struct SettingsView: View {
                     Text(page.rawValue).font(.system(size: 22, weight: .semibold))
                     switch page {
                     case .general: GeneralSettings()
+                    case .tags: TagsSettings()
                     case .models: ModelsSettings()
                     case .skills: SkillsSettings()
                     case .agents: AgentsSettings()
@@ -85,6 +86,43 @@ func apiErrorBanner(_ e: String?) -> some View {
     Group { if let e { BannerPill(icon: "exclamationmark.triangle.fill", text: e, tint: Theme.warning) } }
 }
 
+// MARK: - Tags
+
+struct TagsSettings: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Tags").font(.system(size: 22, weight: .semibold))
+            TagsManagerContent()
+        }
+    }
+}
+
+// MARK: - Pi version (periodic check + upgrade)
+
+struct PiVersionCard: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        let u = model.piUpdate
+        SettingsCard(title: "Pi", footer: "Checked automatically every 6 hours. Upgrading runs `pi update self`; running threads keep the old version until restarted.") {
+            SettingsRow(title: u?.available == true ? "Update available" : "Pi version",
+                        subtitle: u.map { $0.available ? "v\($0.current) → v\($0.latest)" : "v\($0.current)" } ?? "Checking…",
+                        divider: model.piUpdateMessage != nil) {
+                HStack(spacing: 8) {
+                    Button(model.piChecking ? "Checking…" : "Check Now") { Task { await model.checkPiUpdate(force: true) } }
+                        .disabled(model.piChecking || model.piUpgrading)
+                    if let u, u.available {
+                        Button(model.piUpgrading ? "Upgrading…" : "Upgrade to v\(u.latest)") { Task { await model.upgradePi() } }
+                            .buttonStyle(.borderedProminent).disabled(model.piUpgrading)
+                    }
+                }
+            }
+            if let m = model.piUpdateMessage {
+                Text(m).font(.system(size: 12)).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.bottom, 10)
+            }
+        }
+    }
+}
+
 // MARK: - General
 
 struct GeneralSettings: View {
@@ -94,6 +132,7 @@ struct GeneralSettings: View {
     @AppStorage("chatWidth") private var chatWidth = 760.0
     var body: some View {
         @Bindable var ui = ui
+        PiVersionCard()
         SettingsCard(title: "Appearance") {
             SettingsRow(title: "Theme") {
                 Picker("", selection: $ui.appearance) { Text("System").tag("system"); Text("Light").tag("light"); Text("Dark").tag("dark") }.pickerStyle(.segmented).frame(width: 220).labelsHidden()
@@ -157,7 +196,7 @@ struct AboutSettings: View {
             }.frame(width: 96, height: 96).shadow(radius: 8, y: 3)
             Text("TAKT Pi GUI").font(.title2.weight(.semibold))
             Text("Native macOS client for the pi coding agent").foregroundStyle(.secondary)
-            Text("v0.2.0 · pi-web \(model.appUpdate?.current ?? "—")").font(.caption).foregroundStyle(.tertiary)
+            Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev") · pi-web \(model.appUpdate?.current ?? "—")").font(.caption).foregroundStyle(.tertiary)
             Link("github.com/willwill85/TAKT-Pi-GUI", destination: URL(string: "https://github.com/willwill85/TAKT-Pi-GUI")!).font(.caption)
         }.frame(maxWidth: .infinity).padding(.top, 20)
     }
