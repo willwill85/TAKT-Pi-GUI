@@ -84,7 +84,21 @@ public final class AppModel {
         Task { await waitForSidecar() }
     }
 
-    public func shutdown() { pollTask?.cancel(); sidecar.stop() }
+    /// Called when the app quits. Open sessions are asked to write their last turns first, and the
+    /// sidecar is stopped only after that answer (or a short deadline), so a reply still being written is kept.
+    public func shutdown() {
+        pollTask?.cancel()
+        let client = self.client
+        let done = DispatchSemaphore(value: 0)
+        if let client {
+            Task.detached {
+                _ = try? await client.post("/api/shutdown")
+                done.signal()
+            }
+            _ = done.wait(timeout: .now() + 4)
+        }
+        sidecar.stop()
+    }
 
     private func waitForSidecar() async {
         while true {

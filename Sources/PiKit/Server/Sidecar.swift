@@ -253,7 +253,13 @@ public final class SidecarManager {
     private func writePid(_ pid: Int32) { try? String(pid).write(to: pidURL, atomically: true, encoding: .utf8) }
     private func killStaleSidecar() {
         guard let s = try? String(contentsOf: pidURL, encoding: .utf8), let pid = Int32(s.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-        if pid > 1, kill(pid, 0) == 0 { kill(pid, SIGTERM) }
+        // Ask the old server to finish writing its open sessions, then wait for it to exit (up to 4 s)
+        // before a new one starts; SIGKILL only if it ignores the request.
+        if pid > 1, kill(pid, 0) == 0 {
+            kill(pid, SIGTERM)
+            for _ in 0..<40 where kill(pid, 0) == 0 { usleep(100_000) }
+            if kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+        }
         try? FileManager.default.removeItem(at: pidURL)
     }
 }
