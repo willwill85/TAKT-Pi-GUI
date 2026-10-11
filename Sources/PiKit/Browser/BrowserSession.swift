@@ -120,6 +120,8 @@ public final class BrowserSession {
     }
 
     private static func nodeURL() -> URL? {
+        // The bundled copy is named "TAKT Pi", so its permission prompts name the app, not "node".
+        if let helper = Bundle.main.url(forAuxiliaryExecutable: "TAKT Pi"), FileManager.default.isExecutableFile(atPath: helper.path) { return helper }
         for path in ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"] where FileManager.default.isExecutableFile(atPath: path) {
             return URL(fileURLWithPath: path)
         }

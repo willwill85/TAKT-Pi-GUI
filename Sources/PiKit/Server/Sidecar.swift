@@ -74,6 +74,9 @@ public final class SidecarManager {
 
     static func locateNode(bundledIn dir: URL?) -> URL? {
         let fm = FileManager.default
+        // Prefer the copy shipped inside the app: it is named "TAKT Pi", so macOS permission prompts
+        // attribute the sidecar to the app rather than to "node".
+        if let helper = Bundle.main.url(forAuxiliaryExecutable: "TAKT Pi"), fm.isExecutableFile(atPath: helper.path) { return helper }
         if let dir {
             let b = dir.appendingPathComponent("node")
             if fm.isExecutableFile(atPath: b.path) { return b }
