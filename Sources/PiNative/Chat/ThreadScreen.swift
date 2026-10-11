@@ -9,7 +9,7 @@ struct ThreadScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             ThreadHeader(store: store)
-            MessageList(store: store)
+            MessageList(store: store).id(store.sessionId)
             BottomArea(store: store)
         }
         .sheet(item: Binding(get: { store.dialogs.first }, set: { _ in })) { req in
@@ -157,6 +157,9 @@ struct MessageList: View {
     @AppStorage("chatWidth") private var chatWidth = 760.0
     @State private var position = ScrollPosition(edge: .bottom)
     @State private var atBottom = true
+    /// Set when a session switch or message load triggers bottom-following, cleared after the scroll
+    /// finishes. Geometry updates during the follow do not flip atBottom back to false.
+    @State private var following = false
 
     var body: some View {
         let items = TurnBuilder.build(messages: store.messages, streaming: store.streaming.message, isRunning: store.isRunning, liveResults: store.liveToolResults)
@@ -173,20 +176,22 @@ struct MessageList: View {
                     if store.isRunning && store.streaming.message == nil && showWaiting(items) {
                         HStack(spacing: 8) { SpinnerView(size: 11); Text(phaseLabel).font(.system(size: 13)).foregroundStyle(.secondary).modifier(ShimmerIf(active: true)) }.id("waiting")
                     }
-                    Color.clear.frame(height: 1).id("bottom")
+                    Color.clear.frame(height: 1).id(Self.bottomID)
                 }
                 .frame(maxWidth: CGFloat(chatWidth))
                 .padding(.horizontal, 24).padding(.vertical, 20)
                 .frame(maxWidth: .infinity)
             }
+            .defaultScrollAnchor(.bottom)
             .scrollPosition($position)
-            .onScrollGeometryChange(for: Bool.self) { g in g.contentOffset.y + g.containerSize.height >= g.contentSize.height - 60 } action: { _, v in atBottom = v }
-            .onChange(of: items.count) { _, _ in if atBottom { position.scrollTo(edge: .bottom) } }
-            .onChange(of: store.streaming) { _, _ in if atBottom { position.scrollTo(edge: .bottom) } }
-            .onChange(of: store.liveToolResults.count) { _, _ in if atBottom { position.scrollTo(edge: .bottom) } }
-            .onChange(of: store.sessionId) { _, _ in followBottom() }
+            .onScrollGeometryChange(for: Bool.self) { g in g.contentOffset.y + g.containerSize.height >= g.contentSize.height - 60 } action: { _, v in if !following { atBottom = v } }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in if following { position.scrollTo(edge: .bottom) } }
+            .onChange(of: items.count) { _, _ in if atBottom { followBottom() } }
+            .onChange(of: store.streaming) { _, _ in if atBottom { followBottom() } }
+            .onChange(of: store.liveToolResults.count) { _, _ in if atBottom { followBottom() } }
+            .onChange(of: store.sessionId) { _, _ in position = ScrollPosition(id: Self.bottomID, anchor: .bottom); followBottom() }
             .onChange(of: store.messages.count) { _, _ in followBottom() }
-            .onChange(of: store.isLoading) { _, _ in followBottom() }
+            .onChange(of: store.isLoading) { _, loading in if !loading { followBottom() } }
 
             if !atBottom {
                 Button { withAnimation { position.scrollTo(edge: .bottom) } } label: {
@@ -199,11 +204,24 @@ struct MessageList: View {
         .onAppear { followBottom() }
     }
 
-    /// Opening a thread should land on the newest message. The first scroll happens while the list is
-    /// still empty, so it is repeated once the messages actually arrive.
+    /// Anchor pinned to the very end of the transcript. Scrolling to the `.bottom` edge only reaches
+    /// content the lazy stack has already built, so a long thread stopped halfway down.
+    private static let bottomID = "thread-bottom"
+
+    /// Opening a thread should land on the newest message. The first attempt happens while the list is
+    /// still empty, and a lazy stack lays its rows out over several turns, so the jump is repeated until
+    /// the anchor at the end is actually on screen.
     private func followBottom() {
-        atBottom = true
+        following = true; atBottom = true
         position.scrollTo(edge: .bottom)
+        Task { @MainActor in
+            for delay in [80, 160, 320, 480] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard following else { return }
+                position.scrollTo(edge: .bottom)
+            }
+            following = false
+        }
     }
 
     private func showWaiting(_ items: [ThreadItem]) -> Bool {
@@ -226,7 +244,7 @@ struct ItemView: View {
     var body: some View {
         switch item {
         case .user(let m): UserBubble(message: m).padding(.top, 6)
-        case .text(_, let t, let live, _): AssistantText(text: t, live: live, cwd: cwd, sessionId: sessionId)
+        case .text(let id, let t, let live, _): AssistantText(text: t, live: live, cwd: cwd, sessionId: sessionId, cacheKey: id)
         case .work(_, let entries, let live): WorkGroupView(entries: entries, live: live)
         case .bash(let m): BashMessageCard(message: m)
         case .custom(let m): CustomMessageCard(message: m)

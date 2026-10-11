@@ -8,13 +8,16 @@ struct MarkdownText: View {
     var cwd: String?
     var sessionId: String?
     var linkPaths = true
+    /// Stable id of a finished message. Its parsed markdown is cached so scrolling does not re-parse it.
+    var cacheKey: String? = nil
     @AppStorage("chatFontSize") private var chatFont = 14.0
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
     var body: some View {
         let size = self.size ?? CGFloat(chatFont)
         let loader = PiImageLoader(files: model.files, client: model.client, cwd: cwd ?? model.workspace.cwd, sessionId: sessionId)
-        StructuredText(markdown: linkPaths ? PathLinker.linkify(text) : text, syntaxExtensions: [.math])
+        let markdown = MarkdownCache.markdown(text, linkPaths: linkPaths, key: cacheKey)
+        StructuredText(markdown: markdown, syntaxExtensions: [.math])
             .font(.system(size: size))
             .lineSpacing(size * 0.45)
             .textual.structuredTextStyle(.gitHub)
@@ -22,6 +25,20 @@ struct MarkdownText: View {
             .textual.textSelection(.enabled)
             .handlesPathLinks(cwd: cwd)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Finished messages never change, so their path-linkified markdown is parsed once and reused while
+/// the transcript scrolls. The streaming tail has no key and is rebuilt every update, as before.
+enum MarkdownCache {
+    private static var store: [String: String] = [:]
+    static func markdown(_ text: String, linkPaths: Bool, key: String?) -> String {
+        let rendered = linkPaths ? PathLinker.linkify(text) : text
+        guard let key else { return rendered }
+        if let hit = store[key] { return hit }
+        if store.count > 400 { store.removeAll(keepingCapacity: true) }
+        store[key] = rendered
+        return rendered
     }
 }
 
@@ -61,10 +78,11 @@ struct AssistantText: View {
     let live: Bool
     var cwd: String?
     var sessionId: String?
+    var cacheKey: String? = nil
     @State private var hover = false
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            MarkdownText(text: text, cwd: cwd, sessionId: sessionId)
+            MarkdownText(text: text, cwd: cwd, sessionId: sessionId, cacheKey: live ? nil : cacheKey)
             if !live { ReferencedImages(text: text, cwd: cwd, sessionId: sessionId) }
             if hover && !live {
                 Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) } label: {

@@ -12,6 +12,7 @@ cp "$BIN/PiNative" "$APP/Contents/MacOS/PiNative"
 # SwiftPM resource bundles (Textual's highlighter etc.)
 for b in "$BIN"/*.bundle; do [ -e "$b" ] && cp -R "$b" "$APP/Contents/Resources/"; done
 [ -f scripts/AppIcon.icns ] && cp scripts/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+[ -f scripts/browser-server.mjs ] && cp scripts/browser-server.mjs "$APP/Contents/Resources/browser-server.mjs"
 # Optional: bundle the server (see scripts/build-server.sh)
 [ -d dist/server ] && cp -R dist/server "$APP/Contents/Resources/server"
 cat > "$APP/Contents/Info.plist" <<PLIST

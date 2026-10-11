@@ -9,7 +9,7 @@ public struct OpenFile: Identifiable, Hashable, Sendable {
 }
 
 public enum PanelTab: Hashable, Sendable {
-    case review, files, terminal
+    case review, files, terminal, browser
     case file(String)
     case subagent(String)
 }

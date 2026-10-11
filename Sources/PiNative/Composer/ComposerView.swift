@@ -54,10 +54,15 @@ struct ComposerView: View {
         let upto = String(text.prefix(caret))
         if upto.hasPrefix("/"), !upto.contains(" "), !upto.contains("\n") {
             let q = String(upto.dropFirst()).lowercased()
+            // A live thread's list wins; before one exists the list probed at launch fills in.
             let known = (store?.commands.isEmpty == false ? store?.commands : nil) ?? model.slashCommands
-            let ext = known.map { CompletionItem(id: "c-" + $0.id, title: "/" + $0.name, detail: $0.description, insert: "/" + $0.name + " ", icon: iconFor($0.source)) }
-            let all = Self.builtins + ext
-            return Array(all.filter { q.isEmpty || $0.title.lowercased().dropFirst().contains(q) }.prefix(12))
+            var seen = Set(Self.builtins.map { $0.title.lowercased() })
+            let ext = known.compactMap { c -> CompletionItem? in
+                let title = "/" + c.name
+                guard seen.insert(title.lowercased()).inserted else { return nil }
+                return CompletionItem(id: "c-" + c.id, title: title, detail: c.description, insert: title + " ", icon: iconFor(c.source))
+            }
+            return (Self.builtins + ext).filter { q.isEmpty || $0.title.lowercased().dropFirst().contains(q) }
         }
         if let at = upto.lastIndex(of: "@") {
             let token = upto[upto.index(after: at)...]
@@ -403,7 +408,7 @@ struct CompletionList: View {
                     }
                 }.padding(5)
             }
-            .frame(maxHeight: 280).fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: 40, maxHeight: 420)
             .onChange(of: selected) { _, s in if items.indices.contains(s) { proxy.scrollTo(items[s].id) } }
         }
         .frame(width: 460)

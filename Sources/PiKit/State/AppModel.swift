@@ -29,6 +29,8 @@ public final class AppModel {
     /// Slash commands available before any thread exists (skills, prompts, extensions). A live thread's own
     /// list, which also includes its session commands, takes over once one is open.
     public private(set) var slashCommands: [SlashCommand] = []
+    /// The hidden session used only to ask the server for the global command list.
+    private var commandProbeId: String?
     public private(set) var ui = SessionUiState()
     public private(set) var running: Set<String> = []
     public private(set) var awaiting: Set<String> = []
@@ -103,6 +105,7 @@ public final class AppModel {
         Task { await checkUpdate() }
         startPiUpdateChecks()
         Task { await refreshAccountUsage() }
+        Task { await loadGlobalCommands() }
         if newThreadCwd == nil { newThreadCwd = sessions.first?.cwd ?? homeDirectory }
         syncWorkspace()
         await loadModels(cwd: newThreadCwd)
@@ -110,9 +113,10 @@ public final class AppModel {
         pollTask = Task { [weak self] in
             var tick = 0
             while let self, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: .seconds(1.5))
                 tick += 1
-                await self.pollRunning(forceList: tick % 6 == 0)
+                await self.pollRunning(forceList: tick % 4 == 0)
+                if tick % 2 == 0 { await self.syncOpenThread() }
             }
         }
     }
@@ -137,6 +141,24 @@ public final class AppModel {
         }
     }
 
+    /// Skills, prompt templates and extension commands only exist once a session is running, so a brand-new
+    /// thread would otherwise offer nothing but the handful of built-in commands. A throwaway session is
+    /// started in the home directory purely to read that list.
+    public func loadGlobalCommands() async {
+        guard let client, commandProbeId == nil else { return }
+        do {
+            let r = try await client.post("/api/agent/new", body: ["cwd": homeDirectory, "type": "ensure_session"])
+            guard let sid = r["sessionId"]?.string else { return }
+            commandProbeId = sid
+            guard let d = try? await client.command(sid, ["type": "get_commands"]) else { return }
+            let list = (d["commands"]?.array ?? []).compactMap { j -> SlashCommand? in
+                guard let n = j["name"]?.string else { return nil }
+                return SlashCommand(name: n, description: j["description"]?.string ?? "", source: j["source"]?.string ?? "")
+            }
+            if !list.isEmpty { slashCommands = list }
+        } catch { /* the palette simply stays at the built-in commands */ }
+    }
+
     private func applySessionList(_ l: JSON?) {
         guard let l else { return }
         sessions = (l["sessions"]?.array ?? []).compactMap(SessionInfo.init(json:)).filter { !$0.transient || running.contains($0.id) }
@@ -145,6 +167,12 @@ public final class AppModel {
     }
 
     func rebuildSidebar() { sidebar = SidebarModel.build(sessions: sessions, ui: ui, running: running) }
+
+    /// Pulls new messages into the open thread when another client appended to it.
+    private func syncOpenThread() async {
+        guard case .thread(let id) = selection, let s = stores[id] else { return }
+        await s.syncIfChanged()
+    }
 
     private func pollRunning(forceList: Bool) async {
         guard let client else { return }

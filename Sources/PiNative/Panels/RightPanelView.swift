@@ -15,6 +15,7 @@ struct RightPanelView: View {
                 case .review: ReviewPanel()
                 case .files: FilesPanel()
                 case .terminal: TerminalPanel()
+                case .browser: BrowserPanel()
                 case .file(let p):
                     if let f = ws.openFiles.first(where: { $0.path == p }) { FileViewerView(file: f).id(p) } else { FilesPanel() }
                 case .subagent(let id): SubagentViewer(sessionId: id)
@@ -37,6 +38,7 @@ struct PanelTabBar: View {
                     PanelTabButton(icon: "plusminus.circle", title: "Review", active: ws.tab == .review, badge: ws.git.files.isEmpty ? nil : "\(ws.git.files.count)") { ws.tab = .review }
                     if ui.filePlacement == .panel { PanelTabButton(icon: "folder", title: "Files", active: ws.tab == .files) { ws.tab = .files } }
                     PanelTabButton(icon: "terminal", title: "Terminal", active: ws.tab == .terminal) { ws.tab = .terminal }
+                    PanelTabButton(icon: "globe", title: "Browser", active: ws.tab == .browser) { ws.tab = .browser }
                     if !ws.openFiles.isEmpty { Rectangle().fill(Theme.separator).frame(width: 1, height: 16).padding(.horizontal, 4) }
                     ForEach(ws.openFiles) { f in
                         PanelTabButton(icon: nil, title: f.name, active: ws.tab == .file(f.path), file: f.path, onClose: { ws.close(f.path) }) { ws.tab = .file(f.path) }

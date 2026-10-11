@@ -60,6 +60,8 @@ public final class SessionStore {
     public private(set) var messages: [Message] = []
     public private(set) var entryIds: [String] = []
     public private(set) var hasMore = false
+    /// Server snapshot token. A change means another client wrote to this session.
+    private var snapshotRevision: String?
     public private(set) var isLoading = false
     public private(set) var loadError: String?
     public private(set) var streaming = StreamingState()
@@ -106,6 +108,7 @@ public final class SessionStore {
         do {
             let d = try await client.get("/api/sessions/\(sessionId)", query: ["tail": String(tail), "tree": "summary"])
             if let i = d["info"], let si = SessionInfo(json: i) { info = si }
+            snapshotRevision = d["snapshotRevision"]?.string
             let ctx = d["context"] ?? .null
             let msgs = ctx["messages"]?.array ?? []
             let ids = (ctx["entryIds"]?.array ?? []).map { $0.string ?? "" }
@@ -121,6 +124,16 @@ public final class SessionStore {
         } catch {
             loadError = error.localizedDescription
         }
+    }
+
+    /// Reloads when the session file changed under us, so a turn finished in pi-web (or another
+    /// window) shows up here without reopening the thread. Skipped while this window is streaming.
+    public func syncIfChanged() async {
+        guard !isRunning, !isLoading else { return }
+        guard let d = try? await client.get("/api/sessions/\(sessionId)", query: ["tail": "1"]) else { return }
+        let rev = d["snapshotRevision"]?.string
+        guard let rev, rev != snapshotRevision else { return }
+        await load()
     }
 
     public func loadOlder() async {
