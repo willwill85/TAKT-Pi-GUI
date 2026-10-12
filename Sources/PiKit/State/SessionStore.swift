@@ -117,12 +117,21 @@ public final class SessionStore {
                 let fresh = msgs.enumerated().map { Message(json: $1, id: ids.indices.contains($0) ? ids[$0] : nil) }
                 // Everything the user already paged in ("Load earlier messages") sits before the newest
                 // window. A refresh replaces only that window, so older history is never dropped.
+                let merged: [Message]
+                let mergedIds: [String]
                 if let firstId = ids.first, let cut = entryIds.firstIndex(of: firstId), cut > 0 {
-                    messages = Array(messages.prefix(cut)) + fresh
-                    entryIds = Array(entryIds.prefix(cut)) + ids
+                    merged = Array(messages.prefix(cut)) + fresh
+                    mergedIds = Array(entryIds.prefix(cut)) + ids
                 } else {
-                    messages = fresh
-                    entryIds = ids
+                    merged = fresh
+                    mergedIds = ids
+                }
+                // Assigning an identical array still re-renders the whole transcript, so skip it when the
+                // entries are unchanged. That is what made open threads flicker on every sync tick.
+                if mergedIds != entryIds || merged.count != messages.count || merged.last?.id != messages.last?.id {
+                    messages = merged
+                    entryIds = mergedIds
+                    SyncLog.write("\(sessionId.prefix(8)) rewrote transcript (\(merged.count) rows)")
                 }
                 // "hasMore" stays true while there is older history left to page in.
                 hasMore = hasMore || (ctx["hasMore"]?.bool ?? false)
@@ -141,18 +150,20 @@ public final class SessionStore {
     /// the runs this window started, so a turn written from another window (pi-gui, pi-web) is found here.
     /// A thread that is streaming here is left alone: its live tail is newer than the file until the run ends.
     public func syncIfChanged() async {
-        guard !isLoading, !isStreamingHere else { return }
-        guard let d = try? await client.get("/api/sessions/\(sessionId)", query: ["tail": "1"]) else { return }
-        guard let rev = d["snapshotRevision"]?.string else { return }
-        switch SyncDecision.decide(known: snapshotRevision, current: rev) {
+        guard !isLoading, !isRunning else {
+            SyncLog.write("\(sessionId.prefix(8)) skipped loading=\(isLoading) running=\(isRunning)")
+            return
+        }
+        guard let d = try? await client.get("/api/sessions/\(sessionId)", query: ["tail": "1"]) else { SyncLog.write("\(sessionId.prefix(8)) fetch failed"); return }
+        guard let rev = d["snapshotRevision"]?.string else { SyncLog.write("\(sessionId.prefix(8)) no snapshotRevision in response"); return }
+        let decision = SyncDecision.decide(known: snapshotRevision, current: rev)
+        SyncLog.write("\(sessionId.prefix(8)) known=\(snapshotRevision ?? "nil") current=\(rev) -> \(decision)")
+        switch decision {
         case .recordOnly: snapshotRevision = rev
         case .reload: await load()
         case .none: break
         }
     }
-
-    /// True only while this window is receiving the live tail of a run it can see.
-    private var isStreamingHere: Bool { isRunning && streaming.message != nil }
 
     public func loadOlder() async {
         guard hasMore, !isLoading, let oldest = entryIds.first else { return }
@@ -518,5 +529,18 @@ public enum SyncDecision: Equatable, Sendable {
     public static func decide(known: String?, current: String) -> SyncDecision {
         guard let known else { return .recordOnly }   // first sight: remember it, nothing to compare yet
         return known == current ? .none : .reload
+    }
+}
+
+/// Diagnostic trail for thread sync, written to ~/Library/Logs/PiNative/sync.log.
+enum SyncLog {
+    static func write(_ line: String) {
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/PiNative")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("sync.log")
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        guard let data = "\(stamp) \(line)\n".data(using: .utf8) else { return }
+        if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(data); try? h.close() }
+        else { try? data.write(to: url) }
     }
 }

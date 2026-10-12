@@ -148,6 +148,7 @@ public final class SidecarManager {
                 return
             }
             serverDirectory = loc.directory
+            killStaleSidecar()   // once per app start, not on every relaunch: that loop spawned a server every 2 s
             launch(loc)
         }
     }
@@ -155,7 +156,6 @@ public final class SidecarManager {
     private func launch(_ loc: ServerLocation) {
         state = .starting("Starting Pi server…")
         guard let port = Self.freePort() else { state = .failed("No free local port"); return }
-        killStaleSidecar()
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -196,8 +196,13 @@ public final class SidecarManager {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard let self, !self.stopping, self.process === proc, proc.isRunning else { return }
                 if await Self.healthy(ep) {
-                    self.restarts = 0
                     self.state = .ready(ep)
+                    // Forgive earlier crashes only after the server has stayed up for a minute.
+                    Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(60))
+                        guard let self, self.process === proc, proc.isRunning else { return }
+                        self.restarts = 0
+                    }
                     return
                 }
             }
@@ -209,6 +214,8 @@ public final class SidecarManager {
         guard process === p else { return }
         process = nil
         if stopping { return }
+        // Only an unexpected exit restarts it, and at most a few times in a row. A healthy check no longer resets
+        // the count, so a server that comes up and dies again keeps counting toward the limit.
         if restarts < 5 {
             restarts += 1
             state = .starting("Restarting Pi server (\(restarts))…")
